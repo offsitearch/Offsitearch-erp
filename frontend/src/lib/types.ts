@@ -1130,6 +1130,7 @@ export interface TimesheetEntry {
   task_id: number | null;
   date: string;
   hours: string | number;
+  location: string | null;
   description: string | null;
   project_name?: string | null;
   task_title?: string | null;
@@ -1195,6 +1196,7 @@ export interface TimesheetWeekSaveInput {
     task_id?: number | null;
     date: string;
     hours: number;
+    location?: string | null;
     description?: string | null;
   }>;
 }

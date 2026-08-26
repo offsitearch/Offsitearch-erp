@@ -37,10 +37,10 @@ import { TimesheetTabs } from './components/TimesheetTabs';
 
 interface EntryRow {
   key: string;
-  /** ISO date this entry belongs to — locked per row (new rows are created for today). */
   date: string;
   project_id: number | null;
   hours: string;
+  location: string;
   description: string;
 }
 
@@ -69,6 +69,7 @@ function newRow(dateIso: string): EntryRow {
     date: dateIso,
     project_id: null,
     hours: '',
+    location: '',
     description: '',
   };
 }
@@ -80,6 +81,7 @@ function rowsFromDetail(detail: {
     project_id: number | null;
     date: string;
     hours: string | number;
+    location: string | null;
     description: string | null;
   }>;
 }): EntryRow[] {
@@ -88,6 +90,7 @@ function rowsFromDetail(detail: {
     date: entry.date.slice(0, 10),
     project_id: entry.project_id,
     hours: String(num(String(entry.hours))) || String(entry.hours),
+    location: entry.location ?? '',
     description: entry.description ?? '',
   }));
 }
@@ -102,6 +105,7 @@ function buildEntries(rows: EntryRow[]): TimesheetWeekSaveInput['entries'] {
         task_id: null,
         date: row.date,
         hours,
+        location: row.location.trim() || null,
         description: row.description.trim() || null,
       },
     ];
@@ -130,7 +134,7 @@ export default function MyTimesheetsPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">Timesheets</h1>
           <p className="mt-1 text-sm text-muted">
-            Log today's hours as you work — entries can only be added for the current day.
+            Log your hours per project — past draft days in the current week can still be edited.
           </p>
         </div>
         <TimesheetTabs level={user?.org_level_code} />
@@ -199,22 +203,29 @@ function DaySheet() {
 
   const detail = dayQuery.data;
 
-  // Editability follows TODAY'S day row, not the weekly aggregate: other days
-  // may already be submitted while today is still open for logging.
+  // Editability: any draft or rejected day in the week can be edited.
   const todayDay = detail?.days?.find((d) => d.date.slice(0, 10) === todayIso);
   const todayStatus: TimesheetDayStatus = todayDay?.status ?? 'draft';
-  const dayEditable =
-    EDITABLE_DAY_STATUSES.has(todayStatus) && !submitMutation.isPending;
+  const hasEditableDay = detail?.days
+    ? detail.days.some((d) => EDITABLE_DAY_STATUSES.has(d.status))
+    : true; // No day rows yet — week is fresh, editable
+  const dayEditable = hasEditableDay && !submitMutation.isPending;
 
-  // Rows the owner may edit: today's entries only.
-  const editorRows = useMemo(() => rows.filter((r) => r.date === todayIso), [rows, todayIso]);
+  // Rows the owner may edit: all draft/rejected day entries in the week.
+  const editorRows = useMemo(() => {
+    if (!detail) return [];
+    return rows.filter((r) => {
+      const day = detail.days?.find((d) => d.date.slice(0, 10) === r.date);
+      return !day || EDITABLE_DAY_STATUSES.has(day.status);
+    });
+  }, [rows, detail]);
 
-  const todayTotal = useMemo(
+  const weekTotal = useMemo(
     () => editorRows.reduce((sum, r) => sum + num(r.hours), 0),
     [editorRows],
   );
 
-  const overLimit = todayTotal > 24;
+  const overLimit = weekTotal > 24;
   const missingProject = editorRows.some((r) => num(r.hours) > 0 && r.project_id == null);
 
   function patch(key: string, changes: Partial<EntryRow>) {
@@ -308,9 +319,9 @@ function DaySheet() {
               PDF
             </button>
           )}
-          <span className="text-sm font-semibold tabular-nums text-ink" title="Hours logged today">
-            {formatDuration(todayTotal)}
-            <OvertimeChip hours={todayTotal} />
+          <span className="text-sm font-semibold tabular-nums text-ink" title="Hours this week (editable days)">
+            {formatDuration(weekTotal)}
+            <OvertimeChip hours={weekTotal} />
           </span>
         </div>
       </div>
@@ -363,7 +374,7 @@ function DaySheet() {
             <div className="px-5 pb-1 pt-4">
               <p className="text-xs text-muted">
                 {dayEditable
-                  ? 'Add each task as its own row. Past and future dates cannot be logged.'
+                  ? 'Log hours per project. You can edit draft or rejected days in this week. Future dates are not allowed.'
                   : 'Read-only.'}
               </p>
             </div>
@@ -375,19 +386,21 @@ function DaySheet() {
                   title="No hours logged yet"
                   text={
                     dayEditable
-                      ? 'Add a row below to start logging today\'s work.'
+                      ? 'Add a row below to start logging your work.'
                       : 'Nothing was logged.'
                   }
                 />
               </div>
             ) : (
               <div className="overflow-x-auto px-2 pb-2">
-                <table className="w-full min-w-[640px] text-left text-sm">
+                <table className="w-full min-w-[800px] text-left text-sm">
                   <thead className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                     <tr>
-                      <th className="w-24 px-3 py-2">Worked hrs</th>
+                      <th className="w-28 px-3 py-2">Date</th>
+                      <th className="w-20 px-3 py-2">Hrs</th>
                       <th className="px-3 py-2">Project</th>
-                      <th className="px-3 py-2">What did you do?</th>
+                      <th className="px-3 py-2">Location</th>
+                      <th className="px-3 py-2">Description</th>
                       {dayEditable && <th className="w-10 px-2" aria-hidden="true" />}
                     </tr>
                   </thead>
@@ -439,7 +452,7 @@ function DaySheet() {
               <EmptyState
                 icon={CalendarClock}
                 title="No hours logged"
-                text="Only today's work can be logged."
+                text="All days in this week are submitted or approved."
               />
             </div>
           )}
@@ -449,9 +462,9 @@ function DaySheet() {
             {dayEditable ? (
               <>
                 <span className="text-xs text-muted">
-                  Today{' '}
+                  Total{' '}
                   <span className="font-semibold tabular-nums text-ink">
-                    {formatDuration(todayTotal)}
+                    {formatDuration(weekTotal)}
                   </span>
                 </span>
                 <div className="flex items-center gap-2">
@@ -487,7 +500,7 @@ function DaySheet() {
                   <button
                     onClick={handleSubmit}
                     disabled={
-                      todayTotal === 0 ||
+                      weekTotal === 0 ||
                       overLimit ||
                       missingProject ||
                       saveMutation.isPending ||
@@ -527,7 +540,7 @@ function DaySheet() {
       {confirmSubmit && (
         <ConfirmDialog
           title={todayStatus === 'rejected' ? 'Resubmit for approval?' : 'Submit for approval?'}
-          message={`Once submitted, today's hours (${formatDuration(todayTotal)}) are locked while under review — you cannot edit or add entries until a lead responds. Rejected days reopen for fixes; approved days are final.`}
+          message={`Once submitted, your hours (${formatDuration(weekTotal)}) for editable days are locked while under review — you cannot edit or add entries until a lead responds. Rejected days reopen for fixes; approved days are final.`}
           confirmLabel="Send for approval"
           tone="info"
           pending={submitMutation.isPending}
@@ -558,6 +571,16 @@ function EntryEditorRow({
     <tr className="align-middle hover:bg-surfaceWarm/50">
       <td className="px-3 py-2">
         <input
+          type="date"
+          value={row.date}
+          disabled={!editable}
+          onChange={(e) => onChange({ date: e.target.value })}
+          max={toISODate(new Date())}
+          className={`${cellBase} h-9 tabular-nums`}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input
           value={row.hours}
           onChange={(e) =>
             onChange({ hours: e.target.value.replace(/[^0-9.]/g, '').slice(0, 5) })
@@ -584,6 +607,15 @@ function EntryEditorRow({
             </option>
           ))}
         </select>
+      </td>
+      <td className="px-3 py-2">
+        <input
+          value={row.location}
+          onChange={(e) => onChange({ location: e.target.value })}
+          disabled={!editable}
+          placeholder="e.g. Studio, Site"
+          className={`${cellBase} h-9`}
+        />
       </td>
       <td className="px-3 py-2">
         <input

@@ -176,6 +176,7 @@ export function TimesheetDetailModal({
                   <tr>
                     <th className="pb-2 pr-3">Date</th>
                     <th className="pb-2 pr-3">Project / Task</th>
+                    <th className="pb-2 pr-3">Location</th>
                     <th className="pb-2 pr-3">Notes</th>
                     <th className="pb-2 text-right">Hours</th>
                   </tr>
@@ -188,6 +189,7 @@ export function TimesheetDetailModal({
                         <p className="font-medium text-ink">{e.project_name ?? '—'}</p>
                         {e.task_title && <p className="text-xs text-muted">{e.task_title}</p>}
                       </td>
+                      <td className="py-2 pr-3 text-xs text-muted">{e.location ?? '—'}</td>
                       <td className="max-w-[220px] py-2 pr-3 text-xs text-muted">
                         {e.description ?? '—'}
                       </td>

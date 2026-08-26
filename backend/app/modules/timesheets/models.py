@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
+    String,
     Text,
     UniqueConstraint,
 )
@@ -50,6 +51,7 @@ class TimesheetEntry(Base):
     task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"))
     date: Mapped[date] = mapped_column(Date)
     hours: Mapped[Decimal] = mapped_column(Numeric(4, 2))
+    location: Mapped[str | None] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
 
     timesheet = relationship("Timesheet", back_populates="entries")

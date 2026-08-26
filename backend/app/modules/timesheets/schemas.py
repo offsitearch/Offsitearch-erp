@@ -13,6 +13,7 @@ class TimesheetEntryIn(BaseModel):
     task_id: int | None = None
     date: date
     hours: Decimal = Field(gt=0, le=24)
+    location: str | None = Field(default=None, max_length=255)
     description: str | None = Field(default=None, max_length=500)
 
 
@@ -31,6 +32,7 @@ class TimesheetEntryOut(BaseModel):
     task_id: int | None
     date: date
     hours: Decimal
+    location: str | None = None
     description: str | None
 
 

@@ -32,7 +32,6 @@ from app.utils.shared import (
     UNKNOWN_LEVEL_RANK,
     level_rank,
     now_local,
-    to_local,
     user_level_rank,
     utc_now,
 )
@@ -98,19 +97,10 @@ def _sync_sheet_status(sheet: Timesheet, days: dict[date, TimesheetDay]) -> None
 
 
 def _is_editable_day(day_row: TimesheetDay | None) -> bool:
-    """Today's draft or a rejected day can still receive entries."""
+    """A draft or rejected day can still receive entries."""
     return day_row is None or day_row.status in (
         TimesheetStatus.DRAFT,
         TimesheetStatus.REJECTED,
-    )
-
-
-def _is_loggable_date(day_row: TimesheetDay | None, entry_date: date, today: date) -> bool:
-    """Strict logging window: today while editable, or any rejected day."""
-    if not _is_editable_day(day_row):
-        return False
-    return entry_date == today or (
-        day_row is not None and day_row.status == TimesheetStatus.REJECTED
     )
 
 
@@ -164,6 +154,7 @@ async def _detail_dict(db: AsyncSession, sheet: Timesheet) -> dict:
                 "task_id": entry.task_id,
                 "date": entry.date,
                 "hours": entry.hours,
+                "location": entry.location,
                 "description": entry.description,
                 "project_name": project_name,
                 "task_title": task_title,
@@ -406,12 +397,6 @@ async def save_week(db: AsyncSession, user_id: int, payload: TimesheetWeekSave) 
                 f"{entry.date.isoformat()} has already been submitted for review and is locked",
                 409,
             )
-        if not _is_loggable_date(day_row, entry.date, today):
-            raise TimesheetError(
-                f"Entries are limited to today ({today.isoformat()}) — "
-                "past dates can only be corrected after they were rejected",
-                400,
-            )
         await _validate_refs(db, entry.project_id, entry.task_id)
         per_day[entry.date] = per_day.get(entry.date, Decimal("0")) + entry.hours
         if per_day[entry.date] > MAX_HOURS_PER_DAY:
@@ -420,12 +405,12 @@ async def save_week(db: AsyncSession, user_id: int, payload: TimesheetWeekSave) 
                 400,
             )
 
-    # Wholesale replacement of LOGGABLE days only — locked days keep their
+    # Wholesale replacement of EDITABLE days only — locked days keep their
     # entries untouched.
-    loggable_dates = {
-        d for d, row in days.items() if d == today or row.status == TimesheetStatus.REJECTED
+    editable_dates = {
+        d for d, row in days.items() if _is_editable_day(row)
     }
-    target_dates = loggable_dates | {e.date for e in payload.entries}
+    target_dates = editable_dates | {e.date for e in payload.entries}
     await db.execute(
         TimesheetEntry.__table__.delete().where(
             TimesheetEntry.timesheet_id == sheet.id,
@@ -440,6 +425,7 @@ async def save_week(db: AsyncSession, user_id: int, payload: TimesheetWeekSave) 
                 task_id=entry.task_id,
                 date=entry.date,
                 hours=entry.hours,
+                location=entry.location,
                 description=entry.description,
             )
         )
@@ -463,32 +449,57 @@ def _hours_text(value) -> str:
 
 
 async def build_pdf(db: AsyncSession, timesheet_id: int) -> tuple[bytes, str]:
-    """Render a timesheet as a simple PDF receipt. Caller handles access control."""
-    from app.utils.pdf import timesheet_pdf
+    """Render a timesheet as a styled PDF receipt via Jinja2 + Playwright.
+    Caller handles access control.
+    """
+    from app.modules.settings.service import get_studio_info
+    from app.utils.generate_timesheet import (
+        generate_timesheet_pdf,
+        group_entries_by_date,
+        logo_to_data_uri,
+        render_timesheet_html,
+    )
 
     detail = await get_detail(db, timesheet_id)
-    content = timesheet_pdf(
-        employee_name=detail["user_name"] or f"User #{detail['user_id']}",
-        employee_code=detail["employee_id"],
-        week_label=(f"{detail['week_start'].isoformat()} — {detail['week_end'].isoformat()}"),
-        status=str(detail["status"]),
-        submitted_label=(
-            to_local(detail["submitted_at"]).strftime("%d %b %Y")
-            if detail["submitted_at"]
-            else None
-        ),
-        reviewer_name=detail["approved_by_name"],
-        rows=[
-            {
-                "date": entry["date"].isoformat(),
-                "project": entry["project_name"] or "—",
-                "description": entry["description"] or "",
-                "hours": _hours_text(entry["hours"]),
-            }
-            for entry in detail["entries"]
-        ],
-        total_hours=_hours_text(detail["total_hours"]),
+
+    entries_result = await db.execute(
+        select(TimesheetEntry, Project.name)
+        .outerjoin(Project, Project.id == TimesheetEntry.project_id)
+        .where(TimesheetEntry.timesheet_id == timesheet_id)
+        .order_by(TimesheetEntry.date, TimesheetEntry.id)
     )
+    raw_entries = [
+        {
+            "date": entry.date.strftime("%d %b"),
+            "hours": _hours_text(entry.hours),
+            "project": project_name or "\u2014",
+            "location": getattr(entry, "location", None) or "",
+            "description": entry.description or "",
+        }
+        for entry, project_name in entries_result.all()
+    ]
+
+    date_groups = group_entries_by_date(raw_entries)
+
+    company = await get_studio_info(db)
+    logo = company.get("logo")
+    logo_data_uri = logo_to_data_uri(logo) if logo else None
+
+    context = {
+        "company_name": company.get("name", "Studio"),
+        "company_tagline": company.get("tagline", ""),
+        "logo_path": logo_data_uri,
+        "employee_name": detail["user_name"] or f"User #{detail['user_id']}",
+        "designation": "",
+        "period_from": detail["week_start"].strftime("%d %b %Y"),
+        "period_to": detail["week_end"].strftime("%d %b %Y"),
+        "approved_by": detail.get("approved_by_name") or "",
+        "total_hours": f"{_hours_text(detail['total_hours'])} hrs",
+        "date_groups": date_groups,
+    }
+
+    html = render_timesheet_html(context)
+    content = await generate_timesheet_pdf(html)
     filename = (
         f"timesheet-{detail['employee_id'] or detail['user_id']}-"
         f"{detail['week_start'].isoformat()}.pdf"
@@ -782,6 +793,7 @@ async def month_export_rows(
             "employee": name,
             "date": entry.date,
             "project": project_name or "—",
+            "location": entry.location or "",
             "description": entry.description or "",
             "hours": entry.hours,
             "status": "logged",  # day-level status lives in timesheet_days
@@ -796,13 +808,14 @@ async def build_month_xlsx(
     from app.utils.xlsx import write_xlsx
 
     rows = await month_export_rows(db, year, month, user_id)
-    columns = ["Employee ID", "Employee", "Date", "Project", "Description", "Hours"]
+    columns = ["Employee ID", "Employee", "Date", "Project", "Location", "Description", "Hours"]
     data = [
         [
             row["employee_id"],
             row["employee"],
             row["date"].isoformat(),
             row["project"],
+            row["location"],
             row["description"],
             float(row["hours"]),
         ]
@@ -816,38 +829,78 @@ async def build_month_xlsx(
 async def build_month_pdf(
     db: AsyncSession, year: int, month: int, user_id: int | None = None
 ) -> bytes:
-    from app.utils.pdf import timesheet_month_pdf
+    """Render a month's timesheet entries as a styled PDF via Jinja2 + Playwright."""
+    from calendar import monthrange
 
-    rows = await month_export_rows(db, year, month, user_id)
+    from app.modules.settings.service import get_studio_info
+    from app.utils.generate_timesheet import (
+        generate_timesheet_pdf,
+        group_entries_by_date,
+        logo_to_data_uri,
+        render_timesheet_html,
+    )
+
+    start = date(year, month, 1)
+    end = date(year, month, monthrange(year, month)[1])
+    stmt = (
+        select(TimesheetEntry, User.name, User.employee_id, Project.name)
+        .join(Timesheet, Timesheet.id == TimesheetEntry.timesheet_id)
+        .join(User, User.id == Timesheet.user_id)
+        .outerjoin(Project, Project.id == TimesheetEntry.project_id)
+        .where(TimesheetEntry.date >= start, TimesheetEntry.date <= end)
+        .order_by(User.name, User.id, TimesheetEntry.date, TimesheetEntry.id)
+    )
+    if user_id is not None:
+        stmt = stmt.where(Timesheet.user_id == user_id)
+    rows = (await db.execute(stmt)).all()
+
     groups: dict[tuple[str, str], list[dict]] = {}
-    for row in rows:
-        groups.setdefault((row["employee_id"], row["employee"]), []).append(row)
-
-    pdf_groups = []
-    grand_total = Decimal("0")
-    for (employee_id, employee), group_rows in sorted(groups.items()):
-        total = sum((r["hours"] for r in group_rows), Decimal("0"))
-        grand_total += total
-        pdf_groups.append(
+    for entry, name, employee_id, project_name in rows:
+        groups.setdefault((employee_id or "", name), []).append(
             {
-                "heading": f"{employee} ({employee_id})",
-                "rows": [
-                    {
-                        "date": r["date"].isoformat(),
-                        "project": r["project"],
-                        "description": r["description"],
-                        "hours": _hours_text(r["hours"]),
-                    }
-                    for r in group_rows
-                ],
-                "total_hours": _hours_text(total),
+                "date": entry.date.strftime("%d %b"),
+                "hours": _hours_text(entry.hours),
+                "project": project_name or "\u2014",
+                "location": getattr(entry, "location", None) or "",
+                "description": entry.description or "",
             }
         )
-    return timesheet_month_pdf(
-        title=f"Timesheets — {year}-{month:02d}",
-        groups=pdf_groups,
-        grand_total=_hours_text(grand_total),
-    )
+
+    company = await get_studio_info(db)
+    logo = company.get("logo")
+    logo_data_uri = logo_to_data_uri(logo) if logo else None
+
+    employee_sections = []
+    grand_total = Decimal("0")
+    for (employee_id, employee_name), emp_rows in sorted(groups.items()):
+        emp_total = sum((Decimal(str(r["hours"])) for r in emp_rows), Decimal("0"))
+        grand_total += emp_total
+        date_groups = group_entries_by_date(emp_rows)
+        employee_sections.append(
+            {
+                "employee_name": f"{employee_name} ({employee_id})" if employee_id else employee_name,
+                "designation": "",
+                "date_groups": date_groups,
+                "total_hours": f"{_hours_text(emp_total)} hrs",
+            }
+        )
+
+    context = {
+        "company_name": company.get("name", "Studio"),
+        "company_tagline": company.get("tagline", ""),
+        "logo_path": logo_data_uri,
+        "employee_name": employee_sections[0]["employee_name"] if len(employee_sections) == 1 else "",
+        "designation": "",
+        "period_from": start.strftime("%d %b %Y"),
+        "period_to": end.strftime("%d %b %Y"),
+        "approved_by": "",
+        "total_hours": f"{_hours_text(grand_total)} hrs",
+        "date_groups": employee_sections[0]["date_groups"] if len(employee_sections) == 1 else [],
+        "employees": employee_sections,
+    }
+
+    html = render_timesheet_html(context)
+    return await generate_timesheet_pdf(html)
 
 
 # ── Scheduled helpers (Friday reminder / Monday auto-submit) ────────
