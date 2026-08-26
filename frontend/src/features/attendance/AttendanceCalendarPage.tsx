@@ -14,8 +14,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDepartments } from '../../api/employees';
-import { getHolidays, getReportRows } from '../../api/attendance';
-import { exportMonthlyAttendanceCsv, type MonthlyExportMode } from './attendanceExport';
+import { getHolidays, getReportRows, downloadReportXlsx } from '../../api/attendance';
 import { ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_OPTIONS } from '../../lib/constants';
 import { buildMonthGrid, monthLabel, toISODate, WEEKDAYS } from '../../lib/date';
 import type { AttendanceStatus } from '../../lib/types';
@@ -31,7 +30,6 @@ export default function AttendanceCalendarPage() {
   const now = new Date();
   const [viewMonth, setViewMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
   const [departmentId, setDepartmentId] = useState<number | ''>('');
-  const [exportMode, setExportMode] = useState<MonthlyExportMode>('weekly');
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
@@ -141,23 +139,15 @@ export default function AttendanceCalendarPage() {
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-muted">Report type</span>
-          <select
-            value={exportMode}
-            onChange={(e) => setExportMode(e.target.value as MonthlyExportMode)}
-            className={inputClass}
-          >
-            <option value="weekly">Weekly summary</option>
-            <option value="employee">Per employee</option>
-            <option value="daily">Daily summary</option>
-          </select>
+          <span className="inline-flex h-10 items-center rounded-md border border-border bg-surface px-3 text-sm text-muted">Full attendance</span>
         </label>
         <button
-          onClick={() => exportMonthlyAttendanceCsv(report.data ?? [], { mode: exportMode, fromDate: from, toDate: to })}
+          onClick={() => downloadReportXlsx(from, to)}
           disabled={report.isPending || (report.data ?? []).length === 0}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 text-sm font-medium text-ink transition hover:bg-surfaceWarm focus:outline-none focus-visible:ring-2 focus-visible:ring-navy/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download className="h-4 w-4" />
-          Export CSV
+          Open in Sheets
         </button>
       </div>
 

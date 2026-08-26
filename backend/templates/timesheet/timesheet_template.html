@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timesheet Report</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 10pt; color: #1F2937; line-height: 1.4; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .header { display: flex; align-items: center; margin-bottom: 10pt; }
+  .logo { width: 1.5cm; height: 1.5cm; border: 2px solid #1F2937; display: flex; align-items: center;
+          justify-content: center; font-weight: bold; font-size: 14pt; color: #1F2937; flex-shrink: 0; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; }
+  .company-info { margin-left: 12pt; text-align: right; flex: 1; }
+  .company-name { font-size: 16pt; font-weight: bold; color: #1F2937; }
+  .company-tagline { font-size: 8pt; color: #666666; margin-top: 2pt; }
+
+  .accent-rule { border: none; border-top: 2pt solid #B08D57; margin: 8pt 0 6pt 0; }
+
+  .report-title { text-align: center; font-size: 13pt; font-weight: bold; color: #1F2937; margin-bottom: 8pt; }
+
+  /* ── Info bar ────────────────────────────────────────────── */
+  .info-bar { display: flex; justify-content: space-between; background: #F5F5F5; border: 0.5pt solid #D9D9D9;
+              border-radius: 3pt; padding: 6pt 10pt; margin-bottom: 6pt; }
+  .info-bar-item { text-align: center; flex: 1; }
+  .info-bar-item + .info-bar-item { border-left: 0.5pt solid #D9D9D9; }
+  .info-bar-label { display: block; font-size: 7pt; font-weight: bold; text-transform: uppercase; color: #6B7280; letter-spacing: 0.5pt; }
+  .info-bar-value { display: block; font-size: 9.5pt; font-weight: bold; color: #1F2937; margin-top: 1pt; }
+
+  /* ── Info table ──────────────────────────────────────────── */
+  .info-table { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
+  .info-table td { padding: 2pt 4pt; font-size: 9pt; vertical-align: top; }
+  .info-table .label { font-weight: bold; white-space: nowrap; width: 15%; }
+  .info-table .value { width: 35%; }
+
+  .thin-rule { border: none; border-top: 0.5pt solid #D9D9D9; margin: 6pt 0; }
+
+  /* ── Data table ──────────────────────────────────────────── */
+  .data-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6pt; }
+  .data-table th { background: #6B7280; color: white; padding: 6pt 5pt; font-size: 9pt;
+                   text-align: left; font-weight: bold; }
+  .data-table td { padding: 5pt 5pt; font-size: 9pt; border-bottom: 0.5pt solid #D9D9D9;
+                   vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
+
+  .data-table th.col-date, .data-table td.col-date { width: 13%; text-align: center; }
+  .data-table th.col-hours, .data-table td.col-hours { width: 10%; text-align: center; }
+  .data-table th.col-project, .data-table td.col-project { width: 20%; }
+  .data-table th.col-location, .data-table td.col-location { width: 18%; }
+  .data-table th.col-desc, .data-table td.col-desc { width: 39%; }
+
+  .group-gray td { background: #F2F2F2; }
+  .group-white td { background: #FFFFFF; }
+  .group-gray td.date-merged, .group-white td.date-merged { vertical-align: middle; font-weight: 500; }
+
+  .total-row { text-align: right; font-weight: bold; font-size: 11pt; padding-top: 8pt; }
+  .no-entries { text-align: center; color: #666666; font-style: italic; padding: 16pt 0; }
+
+  /* ── Multi-employee sections ─────────────────────────────── */
+  .employee-section { page-break-before: always; }
+  .employee-section.first-employee { page-break-before: avoid; }
+  .employee-heading { font-size: 12pt; font-weight: bold; color: #1F2937; margin: 12pt 0 4pt 0; }
+  .employee-sub { font-size: 9pt; color: #666666; margin-bottom: 8pt; }
+  .employee-total { text-align: right; font-weight: bold; font-size: 10pt; padding-top: 6pt;
+                    border-top: 1pt solid #1F2937; margin-top: 8pt; }
+  .grand-total { text-align: right; font-weight: bold; font-size: 12pt; padding: 10pt 0;
+                 border-top: 2pt solid #B08D57; margin-top: 12pt; }
+
+  /* ── Calendar summary ────────────────────────────────────── */
+  .cal-employee { margin-bottom: 10pt; }
+  .cal-emp-heading { font-size: 10pt; font-weight: bold; color: #1F2937; margin-bottom: 3pt;
+                     border-bottom: 1pt solid #B08D57; padding-bottom: 2pt; }
+  .cal-emp-desig { font-weight: bold; color: #374151; }
+  .cal-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 6.5pt; }
+  .cal-grid th, .cal-grid td { border: 0.5pt solid #D9D9D9; padding: 1.5pt 1pt; text-align: center; vertical-align: middle; }
+  .cal-grid .cal-label { background: #6B7280; color: white; font-weight: bold; width: 20pt; }
+  .cal-cell { line-height: 1.3; }
+  .cal-cell .cal-date { font-weight: bold; font-size: 7pt; }
+  .cal-cell .cal-day { font-size: 5.5pt; color: #666; }
+  .cal-cell .cal-hrs { font-size: 7pt; font-weight: bold; padding: 0.5pt 0; }
+  .cal-c-present { background: #FFFDF5; }
+  .cal-c-weekend-work { background: #EDE8DC; }
+  .cal-c-weekend-off { background: #F5F3EE; color: #999; }
+  .cal-c-leave { background: #FDEAEA; color: #8B2E2E; }
+  .cal-c-half-day-leave { background: #FEF3E2; color: #8B6914; }
+  .cal-c-absent { background: #FEF3E2; color: #8B6914; }
+  .cal-legend { margin-top: 2pt; font-size: 6.5pt; color: #666666; }
+  .cal-legend span { display: inline-block; margin-right: 8pt; }
+  .cal-legend span::before { content: ''; display: inline-block; width: 7pt; height: 7pt;
+                             border: 0.5pt solid #D9D9D9; margin-right: 2pt; vertical-align: middle; }
+  .cal-legend .lg-worked::before { background: #FFFDF5; }
+  .cal-legend .lg-weekend::before { background: #EDE8DC; }
+  .cal-legend .lg-leave::before { background: #FDEAEA; }
+  .cal-legend .lg-half::before { background: #FEF3E2; }
+  .cal-legend .lg-absent::before { background: #FEF3E2; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEADER BLOCK
+     ═══════════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="logo">
+    {% if logo_path %}
+      <img src="{{ logo_path }}" alt="Logo">
+    {% else %}
+      <svg viewBox="0 0 40 40" fill="none" style="width:100%;height:100%">
+        <rect x="2" y="24" width="6" height="14" rx="2" fill="#1F2937"/>
+        <rect x="9.5" y="16" width="6" height="22" rx="2" fill="#1F2937"/>
+        <rect x="17" y="20" width="6" height="18" rx="2" fill="#1F2937"/>
+        <rect x="24.5" y="8" width="6" height="30" rx="2" fill="#C9964A"/>
+        <rect x="32" y="26" width="6" height="12" rx="2" fill="#1F2937"/>
+      </svg>
+    {% endif %}
+  </div>
+  <div class="company-info">
+    <div class="company-name">{{ company_name }}</div>
+    <div class="company-tagline">{{ company_tagline }}</div>
+  </div>
+</div>
+
+<hr class="accent-rule">
+
+<div class="report-title">TIMESHEET REPORT</div>
+
+<div class="info-bar">
+  <div class="info-bar-item">
+    <span class="info-bar-label">Period</span>
+    <span class="info-bar-value">{{ period_from }} &mdash; {{ period_to }}</span>
+  </div>
+  <div class="info-bar-item">
+    <span class="info-bar-label">Employees</span>
+    <span class="info-bar-value">{{ employees|length }}</span>
+  </div>
+  <div class="info-bar-item">
+    <span class="info-bar-label">Total Hours</span>
+    <span class="info-bar-value">{{ total_hours }}</span>
+  </div>
+  <div class="info-bar-item">
+    <span class="info-bar-label">Generated</span>
+    <span class="info-bar-value">{{ generated_on }}</span>
+  </div>
+</div>
+
+<hr class="thin-rule">
+
+{# ── Single-employee mode (weekly receipt) ─────────────────── #}
+{% if not employees %}
+<table class="info-table">
+  <tr>
+    <td class="label">Employee Name:</td><td class="value">{{ employee_name }}</td>
+    <td class="label">Period:</td><td class="value">{{ period_from }} &mdash; {{ period_to }}</td>
+  </tr>
+  <tr>
+    <td class="label">Designation:</td><td class="value">{{ designation or 'N/A' }}</td>
+    <td class="label">Approved By:</td><td class="value">{{ approved_by or 'N/A' }}</td>
+  </tr>
+</table>
+<hr class="thin-rule">
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th class="col-date">Date</th>
+      <th class="col-hours">Hours</th>
+      <th class="col-project">Project</th>
+      <th class="col-location">Location</th>
+      <th class="col-desc">Work Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if date_groups %}
+      {% for group in date_groups %}
+        {% for entry in group.entries %}
+          <tr class="{{ 'group-gray' if group.color == 'gray' else 'group-white' }}">
+            {% if loop.first %}
+              <td class="col-date date-merged" rowspan="{{ group.entries|length }}">{{ group.date }}</td>
+            {% endif %}
+            <td class="col-hours">{{ entry.hours }}</td>
+            <td class="col-project">{{ entry.project }}</td>
+            <td class="col-location">{{ entry.location }}</td>
+            <td class="col-desc">{{ entry.description }}</td>
+          </tr>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="5" class="no-entries">No entries recorded for this period.</td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>
+<div class="total-row">Total Hours: {{ total_hours }}</div>
+
+{# ── Multi-employee mode (monthly export / report) ─────────── #}
+{% else %}
+
+{# ── Calendar summary (same page as header) ─────────────── #}
+{% if employees %}
+<div class="cal-section">
+  <div class="report-title">MONTHLY TIMESHEET SUMMARY</div>
+  {% for emp in employees %}
+  {% if emp.calendar_chunks %}
+  <div class="cal-employee">
+    <div class="cal-emp-heading">{{ emp.employee_name }}{% if emp.designation %} &mdash; <span class="cal-emp-desig">{{ emp.designation }}</span>{% endif %} &mdash; Total: {{ emp.total_hours }}</div>
+    <table class="cal-grid">
+      {% for chunk in emp.calendar_chunks %}
+      <tr>
+        <th class="cal-label"></th>
+        {% for day in chunk %}
+        <th class="cal-c-{{ day.status }}">
+          <div class="cal-cell">
+            <div class="cal-date">{{ day.date.split('-')[2] | int }}</div>
+            <div class="cal-day">{{ day.day }}</div>
+            <div class="cal-hrs">
+              {%- if day.status == 'leave' -%}LV
+              {%- elif day.status == 'half_day_leave' -%}HD
+              {%- elif day.hours > 0 -%}{{ '%.1f' % day.hours }}
+              {%- else -%}—
+              {%- endif -%}
+            </div>
+          </div>
+        </th>
+        {% endfor %}
+        {% for _ in range(15 - chunk|length) %}
+        <th></th>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="cal-legend">
+      <span class="lg-worked">Worked</span>
+      <span class="lg-weekend">Weekend</span>
+      <span class="lg-leave">Leave</span>
+      <span class="lg-half">Half-day</span>
+      <span class="lg-absent">Absent</span>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+<hr class="thin-rule">
+{% endif %}
+
+{% for emp in employees %}
+<div class="employee-section">
+  <div class="employee-heading">{{ emp.employee_name }}</div>
+  {% if emp.designation or emp.approved_by %}
+  <div class="employee-sub">
+    {{- emp.designation or '' -}}
+    {% if emp.approved_by %}{% if emp.designation %} &middot; {% endif %}Approved by: {{ emp.approved_by }}{% endif -%}
+  </div>
+  {% endif %}
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="col-date">Date</th>
+        <th class="col-hours">Hours</th>
+        <th class="col-project">Project</th>
+        <th class="col-location">Location</th>
+        <th class="col-desc">Work Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if emp.date_groups %}
+        {% for group in emp.date_groups %}
+          {% for entry in group.entries %}
+            <tr class="{{ 'group-gray' if group.color == 'gray' else 'group-white' }}">
+              {% if loop.first %}
+                <td class="col-date date-merged" rowspan="{{ group.entries|length }}">{{ group.date }}</td>
+              {% endif %}
+              <td class="col-hours">{{ entry.hours }}</td>
+              <td class="col-project">{{ entry.project }}</td>
+              <td class="col-location">{{ entry.location }}</td>
+              <td class="col-desc">{{ entry.description }}</td>
+            </tr>
+          {% endfor %}
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="5" class="no-entries">No entries recorded for this period.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  <div class="employee-total">Employee Total: {{ emp.total_hours }}</div>
+</div>
+{% endfor %}
+
+<div class="grand-total">Grand Total: {{ total_hours }}</div>
+{% endif %}
+
+</body>
+</html>

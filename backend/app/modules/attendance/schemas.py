@@ -28,6 +28,7 @@ class AttendanceRecordOut(BaseModel):
     status: AttendanceStatus
     late_minutes: int
     total_hours: Decimal | None
+    overtime_hours: Decimal | None
     check_in_method: AttendanceMethod
     check_in_location: str | None
     notes: str | None
@@ -80,6 +81,7 @@ class ReportRow(BaseModel):
     check_out_time: datetime | None
     late_minutes: int
     total_hours: Decimal | None
+    overtime_hours: Decimal | None
 
 
 class ReportOut(BaseModel):

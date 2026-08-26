@@ -37,6 +37,7 @@ class Attendance(TimestampMixin, Base):
     )
     late_minutes: Mapped[int] = mapped_column(Integer, default=0)
     total_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    overtime_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     check_in_method: Mapped[AttendanceMethod] = mapped_column(
         SAEnum(AttendanceMethod, native_enum=False, length=20, values_callable=_enum_values),
         default=AttendanceMethod.WEB,

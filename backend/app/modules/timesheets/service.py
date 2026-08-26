@@ -385,7 +385,6 @@ async def save_week(db: AsyncSession, user_id: int, payload: TimesheetWeekSave) 
     today = now_local().date()
     days = await _day_rows(db, sheet.id)
 
-    per_day: dict[date, Decimal] = {}
     for entry in payload.entries:
         if entry.date < week_start or entry.date > week_end_of(week_start):
             raise TimesheetError(f"{entry.date.isoformat()} falls outside the selected week", 400)
@@ -398,12 +397,6 @@ async def save_week(db: AsyncSession, user_id: int, payload: TimesheetWeekSave) 
                 409,
             )
         await _validate_refs(db, entry.project_id, entry.task_id)
-        per_day[entry.date] = per_day.get(entry.date, Decimal("0")) + entry.hours
-        if per_day[entry.date] > MAX_HOURS_PER_DAY:
-            raise TimesheetError(
-                f"Total hours for {entry.date.isoformat()} exceed {MAX_HOURS_PER_DAY} per day",
-                400,
-            )
 
     # Wholesale replacement of EDITABLE days only — locked days keep their
     # entries untouched.
@@ -805,25 +798,89 @@ async def month_export_rows(
 async def build_month_xlsx(
     db: AsyncSession, year: int, month: int, user_id: int | None = None
 ) -> bytes:
+    from collections import Counter
+
     from app.utils.xlsx import write_xlsx
 
     rows = await month_export_rows(db, year, month, user_id)
+
+    from datetime import date as _date
+
+    month_name = _date(year, month, 1).strftime("%B %Y")
+    today_str = now_local().date().isoformat()
+
+    # Compute summary stats
+    unique_employees = len({r["employee_id"] for r in rows})
+    total_hours = sum(float(r["hours"]) for r in rows)
+    project_counts = Counter(r["project"] for r in rows if r["project"] != "—")
+    top_projects = project_counts.most_common(10)
+
+    # ── Summary sheet ───────────────────────────────────────────
+    num_cols = 5
+    kpi_items = [
+        ("Month", month_name),
+        ("Total Entries", str(len(rows))),
+        ("Employees", str(unique_employees)),
+        ("Total Hours", f"{total_hours:,.1f}"),
+    ]
+    proj_items = [(p, str(c)) for p, c in top_projects]
+
+    extra_before: list[list[tuple[str, str | None]]] = [
+        [(f"Timesheets — {month_name}", "title")] + [("", None)] * (num_cols - 1),
+        [(f"Generated: {today_str}", "subtitle")] + [("", None)] * (num_cols - 1),
+        [("", None)] * num_cols,
+        [("Overview", "section")] + [("", None)] * (num_cols - 1),
+    ]
+    for label, value in kpi_items:
+        extra_before.append([(label, "summary_label"), (str(value), "summary_value")] + [("", None)] * (num_cols - 2))
+    if proj_items:
+        extra_before.append([("", None)] * num_cols)
+        extra_before.append([("Top Projects by Entries", "section")] + [("", None)] * (num_cols - 1))
+        for label, value in proj_items:
+            extra_before.append([(label, "summary_label"), (str(value), "summary_value")] + [("", None)] * (num_cols - 2))
+
+    # ── Detail sheet ────────────────────────────────────────────
     columns = ["Employee ID", "Employee", "Date", "Project", "Location", "Description", "Hours"]
+    col_styles = [
+        "text_border", "text_border", "text_border", "text_border",
+        "text_border", "text_border", "decimal1_border",
+    ]
+    alt_col_styles = [
+        "text_alt", "text_alt", "text_alt", "text_alt",
+        "text_alt", "text_alt", "decimal1_alt",
+    ]
+
     data = [
         [
-            row["employee_id"],
+            row["employee_id"] or "",
             row["employee"],
             row["date"].isoformat(),
             row["project"],
-            row["location"],
-            row["description"],
+            row["location"] or "—",
+            row["description"] or "",
             float(row["hours"]),
         ]
         for row in rows
     ]
-    return write_xlsx(
-        [{"name": f"Timesheets {year}-{month:02d}", "columns": columns, "rows": data}]
-    )
+
+    summary_sheet: dict = {
+        "name": "Summary",
+        "columns": [""] * num_cols,
+        "rows": [],
+        "extra_rows_before": extra_before,
+        "freeze_row": 0,
+    }
+
+    detail_sheet: dict = {
+        "name": f"Timesheets {year}-{month:02d}",
+        "columns": columns,
+        "rows": data,
+        "col_styles": col_styles,
+        "alt_col_styles": alt_col_styles,
+        "freeze_row": 1,
+    }
+
+    return write_xlsx([summary_sheet, detail_sheet])
 
 
 async def build_month_pdf(

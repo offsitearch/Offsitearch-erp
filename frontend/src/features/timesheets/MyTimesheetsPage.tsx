@@ -3,6 +3,8 @@ import {
   AlertCircle,
   CalendarClock,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Copy,
   Download,
@@ -13,7 +15,7 @@ import {
   Send,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getProjectOptions } from '../../api/projects';
 import {
   downloadTimesheetMonthExport,
@@ -26,7 +28,7 @@ import {
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { formatDate, formatDateRange, formatDuration, toISODate } from '../../lib/date';
+import { buildMonthGrid, formatDate, formatDateRange, formatDuration, monthLabel, toISODate, WEEKDAYS } from '../../lib/date';
 import { STANDARD_WORKDAY_HOURS } from '../../lib/constants';
 import { primaryBtnClass, secondaryBtnClass } from '../../lib/styles';
 import { useAuthStore } from '../../store/authStore';
@@ -145,16 +147,116 @@ export default function MyTimesheetsPage() {
   );
 }
 
+function MiniCalendar({
+  selected,
+  today,
+  onSelect,
+  onClose,
+}: {
+  selected: string;
+  today: string;
+  onSelect: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const init = new Date(`${selected}T00:00:00`);
+  const [month, setMonth] = useState(init.getMonth());
+  const [year, setYear] = useState(init.getFullYear());
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', handleClick, { once: true });
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  const cells = buildMonthGrid(year, month);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-border bg-surface shadow-lg"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-3 py-2">
+        <button
+          onClick={() => {
+            if (month === 0) { setMonth(11); setYear((y) => y - 1); }
+            else setMonth((m) => m - 1);
+          }}
+          className="rounded p-0.5 text-muted hover:text-ink"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold text-ink">{monthLabel(year, month)}</span>
+        <button
+          onClick={() => {
+            if (month === 11) { setMonth(0); setYear((y) => y + 1); }
+            else setMonth((m) => m + 1);
+          }}
+          className="rounded p-0.5 text-muted hover:text-ink"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-px px-2 pb-2">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase text-muted">
+            {d}
+          </div>
+        ))}
+        {cells.map((cell, i) => {
+          const iso = toISODate(cell.date);
+          const isSelected = iso === selected;
+          const isTodayCell = iso === today;
+          return (
+            <button
+              key={i}
+              onClick={() => onSelect(iso)}
+              className={`h-8 w-full rounded text-xs font-medium transition
+                ${!cell.inMonth ? 'text-muted/40' : 'text-ink hover:bg-surfaceWarm'}
+                ${isSelected ? 'bg-orange text-white hover:bg-orangeDark' : ''}
+                ${isTodayCell && !isSelected ? 'ring-1 ring-orange/50' : ''}
+              `}
+            >
+              {cell.date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DaySheet() {
   const queryClient = useQueryClient();
   const todayIso = toISODate(new Date());
+  const [dayOffset, setDayOffset] = useState(0);
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  const selectedDate = useMemo(() => {
+    const d = new Date(`${todayIso}T00:00:00`);
+    d.setDate(d.getDate() + dayOffset);
+    return toISODate(d);
+  }, [todayIso, dayOffset]);
+
+  const isToday = dayOffset === 0;
+  const isFuture = dayOffset > 0;
+
+  const selectedDayLabel = useMemo(() => {
+    const d = new Date(`${selectedDate}T00:00:00`);
+    const weekday = d.toLocaleDateString('en-IN', { weekday: 'long' });
+    return `${weekday}, ${formatDate(selectedDate)}`;
+  }, [selectedDate]);
+
   const [rows, setRows] = useState<EntryRow[]>([]);
   const [dirty, setDirty] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
 
   const dayQuery = useQuery({
-    queryKey: ['timesheets', 'day', todayIso],
-    queryFn: () => getMyWeek(todayIso),
+    queryKey: ['timesheets', 'day', selectedDate],
+    queryFn: () => getMyWeek(selectedDate),
   });
 
   useEffect(() => {
@@ -182,7 +284,7 @@ function DaySheet() {
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      saveMyWeek({ week_start: mondayOf(todayIso), entries: buildEntries(rows) }),
+      saveMyWeek({ week_start: mondayOf(selectedDate), entries: buildEntries(rows) }),
     onSuccess: async () => {
       await invalidate();
       setDirty(false);
@@ -204,28 +306,33 @@ function DaySheet() {
   const detail = dayQuery.data;
 
   // Editability: any draft or rejected day in the week can be edited.
-  const todayDay = detail?.days?.find((d) => d.date.slice(0, 10) === todayIso);
-  const todayStatus: TimesheetDayStatus = todayDay?.status ?? 'draft';
-  const hasEditableDay = detail?.days
+  const selectedDay = detail?.days?.find((d) => d.date.slice(0, 10) === selectedDate);
+  const selectedDayStatus: TimesheetDayStatus = selectedDay?.status ?? 'draft';
+  const hasEditableDay = detail?.days && detail.days.length > 0
     ? detail.days.some((d) => EDITABLE_DAY_STATUSES.has(d.status))
     : true; // No day rows yet — week is fresh, editable
   const dayEditable = hasEditableDay && !submitMutation.isPending;
 
-  // Rows the owner may edit: all draft/rejected day entries in the week.
+  // Rows for the selected day only.
+  const dayRows = useMemo(
+    () => rows.filter((r) => r.date === selectedDate),
+    [rows, selectedDate],
+  );
+
+  // Rows the owner may edit: draft/rejected day entries.
   const editorRows = useMemo(() => {
     if (!detail) return [];
-    return rows.filter((r) => {
+    return dayRows.filter((r) => {
       const day = detail.days?.find((d) => d.date.slice(0, 10) === r.date);
       return !day || EDITABLE_DAY_STATUSES.has(day.status);
     });
-  }, [rows, detail]);
+  }, [dayRows, detail]);
 
-  const weekTotal = useMemo(
+  const dayTotal = useMemo(
     () => editorRows.reduce((sum, r) => sum + num(r.hours), 0),
     [editorRows],
   );
 
-  const overLimit = weekTotal > 24;
   const missingProject = editorRows.some((r) => num(r.hours) > 0 && r.project_id == null);
 
   function patch(key: string, changes: Partial<EntryRow>) {
@@ -240,9 +347,9 @@ function DaySheet() {
     }
   }
 
-  /** Copies yesterday's rows into today (fetching last week's sheet if needed). */
+  /** Copies yesterday's rows into the selected date (fetching last week's sheet if needed). */
   async function copyYesterday() {
-    const prev = new Date(`${todayIso}T00:00:00`);
+    const prev = new Date(`${selectedDate}T00:00:00`);
     prev.setDate(prev.getDate() - 1);
     const prevIso = toISODate(prev);
     let sourceRows: EntryRow[];
@@ -261,9 +368,9 @@ function DaySheet() {
     }
     const copies = sourceRows
       .filter((r) => r.date === prevIso && num(r.hours) > 0)
-      .map((r) => ({ ...r, key: newRowKey(), date: todayIso }));
+      .map((r) => ({ ...r, key: newRowKey(), date: selectedDate }));
     if (copies.length === 0) return;
-    setRows((prevRows) => [...prevRows.filter((r) => r.date !== todayIso), ...copies]);
+    setRows((prevRows) => [...prevRows.filter((r) => r.date !== selectedDate), ...copies]);
     setDirty(true);
   }
 
@@ -294,17 +401,61 @@ function DaySheet() {
       {/* ── Daily header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="flex items-center gap-2">
-          <CalendarClock className="h-4 w-4 text-muted" />
-          <span className="text-sm font-semibold text-ink">Today</span>
-          <span className="text-sm tabular-nums text-muted">{formatDate(todayIso)}</span>
+          <button
+            onClick={() => setDayOffset((d) => d - 1)}
+            title="Previous day"
+            className="rounded p-0.5 text-muted transition hover:bg-surfaceWarm hover:text-ink"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="relative flex flex-col items-center">
+            <button
+              onClick={() => setShowCalendar((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-ink transition hover:bg-surfaceWarm"
+              title="Open calendar"
+            >
+              <CalendarClock className="h-4 w-4 text-muted" />
+              {selectedDayLabel}
+            </button>
+            {!isToday && (
+              <button
+                onClick={() => setDayOffset(0)}
+                className="text-[10px] font-medium text-orange transition hover:text-orangeDark"
+              >
+                ← Back to today
+              </button>
+            )}
+            {showCalendar && (
+              <MiniCalendar
+                selected={selectedDate}
+                today={todayIso}
+                onSelect={(date) => {
+                  const diff = Math.round(
+                    (new Date(`${date}T00:00:00`).getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000,
+                  );
+                  setDayOffset(diff);
+                  setShowCalendar(false);
+                }}
+                onClose={() => setShowCalendar(false)}
+              />
+            )}
+          </div>
+          <button
+            onClick={() => setDayOffset((d) => d + 1)}
+            title="Next day"
+            disabled={isFuture}
+            className="rounded p-0.5 text-muted transition hover:bg-surfaceWarm hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
         <div className="flex items-center gap-3">
           {detail && (
             <TimesheetStatusBadge
               status={
-                todayStatus === 'draft'
+                selectedDayStatus === 'draft'
                   ? detail.status
-                  : (todayStatus as TimesheetStatus)
+                  : (selectedDayStatus as TimesheetStatus)
               }
             />
           )}
@@ -319,15 +470,15 @@ function DaySheet() {
               PDF
             </button>
           )}
-          <span className="text-sm font-semibold tabular-nums text-ink" title="Hours this week (editable days)">
-            {formatDuration(weekTotal)}
-            <OvertimeChip hours={weekTotal} />
+          <span className="text-sm font-semibold tabular-nums text-ink" title="Hours logged for this day">
+            {formatDuration(dayTotal)}
+            <OvertimeChip hours={dayTotal} />
           </span>
         </div>
       </div>
 
       {/* ── Status banners (driven by today's day row) ── */}
-      {todayStatus === 'rejected' && (
+      {selectedDayStatus === 'rejected' && (
         <div className="flex items-start gap-2 border-b border-danger/25 bg-dangerSoft px-5 py-3 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
@@ -337,13 +488,13 @@ function DaySheet() {
           </span>
         </div>
       )}
-      {todayStatus === 'submitted' && (
+      {selectedDayStatus === 'submitted' && (
         <div className="flex items-start gap-2 border-b border-warning/25 bg-warningSoft px-5 py-3 text-sm text-warning">
           <Clock className="mt-0.5 h-4 w-4 shrink-0" />
           <span>Submitted — waiting for a lead to review.</span>
         </div>
       )}
-      {todayStatus === 'approved' && (
+      {selectedDayStatus === 'approved' && (
         <div className="flex items-start gap-2 border-b border-success/25 bg-successSoft px-5 py-3 text-sm text-success">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
@@ -361,7 +512,7 @@ function DaySheet() {
       ) : dayQuery.isError ? (
         <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
           <AlertCircle className="h-6 w-6 text-danger" />
-          <p className="text-sm font-medium text-ink">Couldn't load today's timesheet.</p>
+          <p className="text-sm font-medium text-ink">Couldn't load timesheet.</p>
           <button onClick={() => dayQuery.refetch()} className={secondaryBtnClass}>
             <RefreshCw className="h-3.5 w-3.5" />
             Retry
@@ -369,12 +520,12 @@ function DaySheet() {
         </div>
       ) : (
         <>
-          {/* ── Today's entries ── */}
+          {/* ── Entries for selected day ── */}
           <div className="border-b border-border">
             <div className="px-5 pb-1 pt-4">
               <p className="text-xs text-muted">
                 {dayEditable
-                  ? 'Log hours per project. You can edit draft or rejected days in this week. Future dates are not allowed.'
+                  ? 'Log hours for this day. You can edit draft or rejected days. Future dates are not allowed.'
                   : 'Read-only.'}
               </p>
             </div>
@@ -427,7 +578,7 @@ function DaySheet() {
               <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
                 <button
                   onClick={() => {
-                    setRows((prev) => [...prev, newRow(todayIso)]);
+                    setRows((prev) => [...prev, newRow(selectedDate)]);
                     setDirty(true);
                   }}
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 text-sm font-medium text-muted transition hover:border-orange/40 hover:text-orange"
@@ -452,7 +603,7 @@ function DaySheet() {
               <EmptyState
                 icon={CalendarClock}
                 title="No hours logged"
-                text="All days in this week are submitted or approved."
+                text="This day has no entries or is submitted/approved."
               />
             </div>
           )}
@@ -464,15 +615,10 @@ function DaySheet() {
                 <span className="text-xs text-muted">
                   Total{' '}
                   <span className="font-semibold tabular-nums text-ink">
-                    {formatDuration(weekTotal)}
+                    {formatDuration(dayTotal)}
                   </span>
                 </span>
                 <div className="flex items-center gap-2">
-                  {overLimit && (
-                    <span className="text-xs font-medium text-danger">
-                      A day cannot exceed 24 hours.
-                    </span>
-                  )}
                   {missingProject && (
                     <span className="text-xs font-medium text-warning">
                       Pick a project for every entry with hours.
@@ -489,7 +635,6 @@ function DaySheet() {
                     onClick={() => saveMutation.mutate()}
                     disabled={
                       !dirty ||
-                      overLimit ||
                       missingProject ||
                       saveMutation.isPending
                     }
@@ -500,8 +645,7 @@ function DaySheet() {
                   <button
                     onClick={handleSubmit}
                     disabled={
-                      weekTotal === 0 ||
-                      overLimit ||
+                      dayTotal === 0 ||
                       missingProject ||
                       saveMutation.isPending ||
                       submitMutation.isPending
@@ -511,7 +655,7 @@ function DaySheet() {
                     <Send className="h-4 w-4" />
                     {submitMutation.isPending
                       ? 'Submitting…'
-                      : todayStatus === 'rejected'
+                      : selectedDayStatus === 'rejected'
                         ? 'Resubmit'
                         : 'Submit for approval'}
                   </button>
@@ -519,9 +663,9 @@ function DaySheet() {
               </>
             ) : (
               <p className="text-xs text-muted">
-                {todayStatus === 'approved'
+                {selectedDayStatus === 'approved'
                   ? 'Approved days are locked.'
-                  : todayStatus === 'submitted'
+                  : selectedDayStatus === 'submitted'
                     ? 'Waiting for review — you can edit again if it is rejected.'
                     : 'Read-only.'}
               </p>
@@ -539,8 +683,8 @@ function DaySheet() {
 
       {confirmSubmit && (
         <ConfirmDialog
-          title={todayStatus === 'rejected' ? 'Resubmit for approval?' : 'Submit for approval?'}
-          message={`Once submitted, your hours (${formatDuration(weekTotal)}) for editable days are locked while under review — you cannot edit or add entries until a lead responds. Rejected days reopen for fixes; approved days are final.`}
+          title={selectedDayStatus === 'rejected' ? 'Resubmit for approval?' : 'Submit for approval?'}
+          message={`Once submitted, your hours (${formatDuration(dayTotal)}) for editable days are locked while under review — you cannot edit or add entries until a lead responds. Rejected days reopen for fixes; approved days are final.`}
           confirmLabel="Send for approval"
           tone="info"
           pending={submitMutation.isPending}

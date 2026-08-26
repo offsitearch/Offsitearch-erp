@@ -97,20 +97,20 @@ export async function getReportRows(
   return data.rows;
 }
 
-/** Downloads the attendance report as a CSV file. */
-export async function downloadReportCsv(
+/** Downloads the attendance report as an XLSX file. */
+export async function downloadReportXlsx(
   fromDate: string,
   toDate: string,
   departmentId?: number | null,
 ): Promise<void> {
   const response = await api.get('/attendance/report', {
-    params: { from_date: fromDate, to_date: toDate, department_id: departmentId ?? undefined, format: 'csv' },
+    params: { from_date: fromDate, to_date: toDate, department_id: departmentId ?? undefined, format: 'xlsx' },
     responseType: 'blob',
   });
   const url = URL.createObjectURL(response.data);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `attendance_${fromDate}_${toDate}.csv`;
+  link.download = `attendance_${fromDate}_${toDate}.xlsx`;
   link.click();
   URL.revokeObjectURL(url);
 }

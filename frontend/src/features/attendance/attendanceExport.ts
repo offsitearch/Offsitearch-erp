@@ -48,8 +48,33 @@ function roundHours(value: number): number | '' {
   return Math.round(value * 100) / 100;
 }
 
+function statusLabel(s: AttendanceStatus): string {
+  return ATTENDANCE_STATUS_META[s]?.label ?? s;
+}
+
 /** Exports one day of attendance (respects the filters applied on screen). */
 export function exportDayAttendanceCsv(rows: AttendanceUserRow[], dateISO: string): void {
+  const counts = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<AttendanceStatus, number>;
+  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  const totalHours = rows.reduce((sum, r) => sum + (r.total_hours !== null ? Number(r.total_hours) : 0), 0);
+  const totalOvertime = rows.reduce((sum, r) => sum + (r.overtime_hours !== null ? Number(r.overtime_hours) : 0), 0);
+  const totalLate = rows.reduce((sum, r) => sum + (r.late_minutes || 0), 0);
+
+  const summaryRows: unknown[][] = [
+    ['Attendance Report — Day View'],
+    [`Date: ${dateISO}`],
+    [],
+    ['Total Records', rows.length],
+    ['Total Hours', `${Math.round(totalHours * 100) / 100}`],
+    ['Total Overtime (hrs)', `${Math.round(totalOvertime * 100) / 100}`],
+    ['Total Late (mins)', totalLate],
+    [],
+    ['Status Breakdown'],
+    ...STATUS_ORDER.map((s) => [statusLabel(s), counts[s]]),
+    [],
+    [],
+  ];
+
   const header = [
     'Date',
     'Employee ID',
@@ -61,6 +86,7 @@ export function exportDayAttendanceCsv(rows: AttendanceUserRow[], dateISO: strin
     'Check Out',
     'Late (mins)',
     'Total Hours',
+    'Overtime Hours',
     'Check-in Method',
     'Check-in Location',
     'Notes',
@@ -78,18 +104,37 @@ export function exportDayAttendanceCsv(rows: AttendanceUserRow[], dateISO: strin
       r.check_out_time ? formatTime(r.check_out_time) : '',
       r.late_minutes || '',
       r.total_hours ?? '',
+      r.overtime_hours ?? '',
       ATTENDANCE_METHOD_LABELS[r.check_in_method] ?? r.check_in_method,
       r.check_in_location ?? '',
       r.notes ?? '',
     ]);
-  downloadCsvFile(header, body, `attendance_${dateISO}.csv`);
+  downloadCsvFile(
+    [],
+    [...summaryRows, header, ...body],
+    `attendance_${dateISO}.csv`,
+  );
+  // Overwrite: use header-less approach since downloadCsvFile expects header row
+  // Re-implement inline for this special case
+  const allLines = [
+    ...summaryRows.map((row) => row.map(csvCell).join(',')),
+    header.map(csvCell).join(','),
+    ...body.map((row) => row.map(csvCell).join(',')),
+  ];
+  const blob = new Blob([`\uFEFF${allLines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `attendance_${dateISO}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export type MonthlyExportMode = 'weekly' | 'employee' | 'daily';
 
 /**
- * Exports a summarized month report instead of raw punch rows:
- * - weekly: one row per calendar week (Mon–Sun)
+ * Exports a summarized month report with title and summary section:
+ * - weekly: one row per calendar week (Mon-Sun)
  * - employee: one row per employee with status totals
  * - daily: one row per date
  */
@@ -109,6 +154,26 @@ export function exportMonthlyAttendanceCsv(
       }
       entry.rows.push(r);
     }
+
+    const allCounts = statusCounts(rows);
+    const totalWorked = WORKING_STATUSES.reduce((sum, s) => sum + allCounts[s], 0);
+    const totalHours = sumHours(rows);
+
+    const summaryRows: unknown[][] = [
+      ['Attendance Report — Employee Summary'],
+      [`Period: ${fromDate} to ${toDate}`],
+      [],
+      ['Total Employees', byUser.size],
+      ['Total Records', rows.length],
+      ['Total Worked Days', totalWorked],
+      ['Total Hours', roundHours(totalHours)],
+      [],
+      ['Status Totals'],
+      ...STATUS_ORDER.map((s) => [statusLabel(s), allCounts[s]]),
+      [],
+      [],
+    ];
+
     const header = [
       'Employee ID',
       'Name',
@@ -125,7 +190,7 @@ export function exportMonthlyAttendanceCsv(
       .map(([, e]) => {
         const counts = statusCounts(e.rows);
         const worked = WORKING_STATUSES.reduce((sum, s) => sum + counts[s], 0);
-        const totalHours = sumHours(e.rows);
+        const totalH = sumHours(e.rows);
         const totalLate = e.rows.reduce((sum, r) => sum + (r.late_minutes || 0), 0);
         return [
           e.id ?? '',
@@ -134,12 +199,24 @@ export function exportMonthlyAttendanceCsv(
           e.desig ?? '',
           ...STATUS_ORDER.map((s) => counts[s]),
           worked,
-          roundHours(totalHours),
-          roundHours(worked ? totalHours / worked : 0),
+          roundHours(totalH),
+          roundHours(worked ? totalH / worked : 0),
           formatMinutesDuration(totalLate),
         ];
       });
-    downloadCsvFile(header, body, `attendance_by_employee_${fromDate}_${toDate}.csv`);
+
+    const allLines = [
+      ...summaryRows.map((row) => row.map(csvCell).join(',')),
+      header.map(csvCell).join(','),
+      ...body.map((row) => row.map(csvCell).join(',')),
+    ];
+    const blob = new Blob([`\uFEFF${allLines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance_by_employee_${fromDate}_${toDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
     return;
   }
 
@@ -150,6 +227,24 @@ export function exportMonthlyAttendanceCsv(
       list.push(r);
       byDate.set(r.date, list);
     }
+
+    const allCounts = statusCounts(rows);
+    const totalHours = sumHours(rows);
+
+    const summaryRows: unknown[][] = [
+      ['Attendance Report — Daily Summary'],
+      [`Period: ${fromDate} to ${toDate}`],
+      [],
+      ['Total Days', byDate.size],
+      ['Total Records', rows.length],
+      ['Total Hours', roundHours(totalHours)],
+      [],
+      ['Status Totals'],
+      ...STATUS_ORDER.map((s) => [statusLabel(s), allCounts[s]]),
+      [],
+      [],
+    ];
+
     const header = [
       'Date',
       'Day',
@@ -164,21 +259,34 @@ export function exportMonthlyAttendanceCsv(
       .map(([iso, dayRows]) => {
         const counts = statusCounts(dayRows);
         const worked = WORKING_STATUSES.reduce((sum, s) => sum + counts[s], 0);
-        const totalHours = sumHours(dayRows);
+        const totalH = sumHours(dayRows);
         return [
           iso,
           new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short' }),
           dayRows.length,
           ...STATUS_ORDER.map((s) => counts[s]),
           worked,
-          roundHours(totalHours),
-          roundHours(worked ? totalHours / worked : 0),
+          roundHours(totalH),
+          roundHours(worked ? totalH / worked : 0),
         ];
       });
-    downloadCsvFile(header, body, `attendance_daily_summary_${fromDate}_${toDate}.csv`);
+
+    const allLines = [
+      ...summaryRows.map((row) => row.map(csvCell).join(',')),
+      header.map(csvCell).join(','),
+      ...body.map((row) => row.map(csvCell).join(',')),
+    ];
+    const blob = new Blob([`\uFEFF${allLines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance_daily_summary_${fromDate}_${toDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
     return;
   }
 
+  // Weekly mode
   const byWeek = new Map<string, { dates: Set<string>; rows: ReportRow[] }>();
   for (const r of rows) {
     const key = weekStartFor(new Date(`${r.date}T00:00:00`));
@@ -190,6 +298,24 @@ export function exportMonthlyAttendanceCsv(
     bucket.dates.add(r.date);
     bucket.rows.push(r);
   }
+
+  const allCounts = statusCounts(rows);
+  const totalHours = sumHours(rows);
+
+  const summaryRows: unknown[][] = [
+    ['Attendance Report — Weekly Summary'],
+    [`Period: ${fromDate} to ${toDate}`],
+    [],
+    ['Total Weeks', byWeek.size],
+    ['Total Records', rows.length],
+    ['Total Hours', roundHours(totalHours)],
+    [],
+    ['Status Totals'],
+    ...STATUS_ORDER.map((s) => [statusLabel(s), allCounts[s]]),
+    [],
+    [],
+  ];
+
   const header = [
     'Week',
     'Date Range',
@@ -205,7 +331,7 @@ export function exportMonthlyAttendanceCsv(
     .map(([weekStart, bucket], i) => {
       const counts = statusCounts(bucket.rows);
       const worked = WORKING_STATUSES.reduce((sum, s) => sum + counts[s], 0);
-      const totalHours = sumHours(bucket.rows);
+      const totalH = sumHours(bucket.rows);
       const dates = [...bucket.dates].sort();
       return [
         `Week ${i + 1} (${new Date(`${weekStart}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})`,
@@ -214,9 +340,21 @@ export function exportMonthlyAttendanceCsv(
         bucket.rows.length,
         ...STATUS_ORDER.map((s) => counts[s]),
         worked,
-        roundHours(totalHours),
-        roundHours(worked ? totalHours / worked : 0),
+        roundHours(totalH),
+        roundHours(worked ? totalH / worked : 0),
       ];
     });
-  downloadCsvFile(header, body, `attendance_weekly_summary_${fromDate}_${toDate}.csv`);
+
+  const allLines = [
+    ...summaryRows.map((row) => row.map(csvCell).join(',')),
+    header.map(csvCell).join(','),
+    ...body.map((row) => row.map(csvCell).join(',')),
+  ];
+  const blob = new Blob([`\uFEFF${allLines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `attendance_weekly_summary_${fromDate}_${toDate}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }

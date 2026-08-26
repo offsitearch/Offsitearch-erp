@@ -4,3 +4,4 @@ pytest-asyncio==0.25.*
 pytest-cov==5.*
 ruff==0.6.*
 import-linter==2.*
+faker>=30.0

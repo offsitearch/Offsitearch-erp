@@ -17,7 +17,6 @@ from app.api.deps import require_financial_access, require_min_level
 from app.db.session import get_db
 from app.models import User
 from app.modules.reports import service as reports_service
-from app.utils.pdf import timesheet_report_pdf
 from app.utils.shared import now_local
 from app.utils.xlsx import write_xlsx
 
@@ -57,21 +56,20 @@ async def projects_report(
     format: str = Query(default="json", pattern=_FORMAT_PATTERN),
 ):
     report = await reports_service.projects_report(db, status, project_type)
-    columns = [
-        "project_code",
-        "name",
-        "client_name",
-        "project_type",
-        "status",
-        "progress_pct",
-        "budget",
-        "studio_fee",
-        "expenses",
-        "hours_logged",
-    ]
-    rows = [[row[c] for c in columns] for row in report["rows"]]
-    if format != "json":
-        return _export_response(report["title"], report["summary"], columns, rows, format)
+    if format == "xlsx":
+        content = reports_service.projects_xlsx(report)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="projects_report.xlsx"'},
+        )
+    if format == "csv":
+        content = reports_service.projects_csv(report)
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="projects_report.csv"'},
+        )
     return report
 
 
@@ -83,19 +81,20 @@ async def finance_report(
     format: str = Query(default="json", pattern=_FORMAT_PATTERN),
 ):
     report = await reports_service.finance_report(db, period)
-    columns = [
-        "invoice_number",
-        "client_name",
-        "invoice_date",
-        "due_date",
-        "total",
-        "paid_amount",
-        "outstanding",
-        "status",
-    ]
-    rows = [[row[c] for c in columns] for row in report["rows"]]
-    if format != "json":
-        return _export_response(report["title"], report["summary"], columns, rows, format)
+    if format == "xlsx":
+        content = reports_service.finance_xlsx(report)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="finance_report.xlsx"'},
+        )
+    if format == "csv":
+        content = reports_service.finance_csv(report)
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="finance_report.csv"'},
+        )
     return report
 
 
@@ -127,7 +126,7 @@ async def timesheets_report(
     ``department_id`` / ``employee_id`` narrow the scope. ``format=pdf``
     renders one section per employee (each starting on a fresh page,
     flowing across pages when long); xlsx adds a Detail sheet; csv
-    stays the flat project × employee aggregate.
+    stays the flat project x employee aggregate.
     """
     if to_date < from_date:
         from_date, to_date = to_date, from_date
@@ -144,30 +143,64 @@ async def timesheets_report(
     rows = [[row[c] for c in columns] for row in report["rows"]]
 
     if format == "pdf":
-        filters_bits = [f"{from_date.isoformat()} → {to_date.isoformat()}"]
-        filters_bits.append(f"grouped by {group_by}")
-        if department_id is not None:
-            dept_name = next(
-                (emp["department"] for emp in report["employees"] if emp["department"]),
-                None,
-            )
-            filters_bits.append(
-                f"department #{department_id}" + (f" · {dept_name}" if dept_name else "")
-            )
-        if employee_id is not None:
-            filters_bits.append("single employee")
-        content = timesheet_report_pdf(
-            title=report["title"],
-            filters_line=" · ".join(filters_bits),
-            employees=[
-                {
-                    **emp,
-                    "total_hours": f"{emp['total_hours']:g}",
-                    "groups": [{**g, "hours": f"{g['hours']:g}"} for g in emp["groups"]],
-                }
-                for emp in report["employees"]
-            ],
+        from app.modules.settings.service import get_studio_info
+        from app.utils.generate_timesheet import (
+            generate_timesheet_pdf,
+            group_entries_by_date,
+            logo_to_data_uri,
+            render_timesheet_html,
         )
+
+        company = await get_studio_info(db)
+        logo = company.get("logo")
+        logo_data_uri = logo_to_data_uri(logo) if logo else None
+
+        employee_sections = []
+        for emp in report["employees"]:
+            raw_entries = []
+            for group in emp["groups"]:
+                for r in group["rows"]:
+                    raw_entries.append(
+                        {
+                            "date": r.get("date") or group["label"],
+                            "hours": f"{r['hours']:g}",
+                            "project": r["project"],
+                            "location": r.get("location") or "",
+                            "description": r.get("description") or "",
+                        }
+                    )
+            emp_date_groups = group_entries_by_date(raw_entries)
+            cal = emp.get("calendar", [])
+            chunk_size = 15
+            cal_chunks = [cal[i : i + chunk_size] for i in range(0, len(cal), chunk_size)]
+            employee_sections.append(
+                {
+                    "employee_name": emp["employee_name"],
+                    "designation": emp.get("department") or "",
+                    "approved_by": emp.get("approved_by_name") or "",
+                    "date_groups": emp_date_groups,
+                    "total_hours": f"{emp['total_hours']:g} hrs",
+                    "calendar_chunks": cal_chunks,
+                }
+            )
+
+        context = {
+            "company_name": company.get("name", "Studio"),
+            "company_tagline": company.get("tagline", ""),
+            "logo_path": logo_data_uri,
+            "employee_name": "",
+            "designation": "",
+            "period_from": from_date.strftime("%d %b %Y"),
+            "period_to": to_date.strftime("%d %b %Y"),
+            "approved_by": "",
+            "total_hours": f"{report['summary']['total_hours']:g} hrs",
+            "date_groups": [],
+            "employees": employee_sections,
+            "generated_on": now_local().date().strftime("%d %b %Y"),
+        }
+
+        html = render_timesheet_html(context)
+        content = await generate_timesheet_pdf(html)
         return Response(
             content=content,
             media_type="application/pdf",
@@ -181,6 +214,48 @@ async def timesheets_report(
         )
 
     if format == "xlsx":
+        today_str = now_local().date().isoformat()
+        s = report["summary"]
+        title = "Timesheets Report"
+
+        # ── Summary sheet with KPIs ─────────────────────────────
+        num_cols = 6
+        kpi_items = [
+            ("Date Range", f"{s['from']} to {s['to']}"),
+            ("Total Hours", f"{s['total_hours']:,.1f}"),
+            ("Employees", str(s["employees"])),
+            ("Projects", str(s["projects"])),
+            ("Periods", str(s["periods"])),
+        ]
+        extra_before: list[list[tuple[str, str | None]]] = [
+            [(title, "title")] + [("", None)] * (num_cols - 1),
+            [(f"Generated: {today_str}", "subtitle")] + [("", None)] * (num_cols - 1),
+            [("", None)] * num_cols,
+            [("Summary", "section")] + [("", None)] * (num_cols - 1),
+        ]
+        for label, value in kpi_items:
+            extra_before.append([(label, "summary_label"), (str(value), "summary_value")] + [("", None)] * (num_cols - 2))
+
+        # ── Aggregate detail rows ───────────────────────────────
+        agg_columns = ["Project Code", "Project Name", "Employee ID", "Employee", "Hours"]
+        agg_rows = [[row[c] for c in ["project_code", "project_name", "employee_id", "employee_name", "hours"]] for row in report["rows"]]
+        total_hours_all = sum(r["hours"] for r in report["rows"])
+
+        summary_sheet: dict = {
+            "name": "Summary",
+            "columns": agg_columns,
+            "rows": agg_rows,
+            "col_styles": ["text_border", "text_border", "text_border", "text_border", "decimal1_border"],
+            "alt_col_styles": ["text_alt", "text_alt", "text_alt", "text_alt", "decimal1_alt"],
+            "freeze_row": len(extra_before) + 1,
+            "extra_rows_before": extra_before,
+            "extra_rows_after": [
+                [("TOTAL", "subtotal"), ("", None), ("", None), ("", None),
+                 (f"{total_hours_all:g}" if isinstance(total_hours_all, float) else str(total_hours_all), "subtotal")],
+            ],
+        }
+
+        # ── Detail sheet per employee ───────────────────────────
         detail_columns = ["Employee", "Period", "Date", "Project", "Description", "Hours"]
         detail_rows = []
         for emp in report["employees"]:
@@ -196,16 +271,16 @@ async def timesheets_report(
                             float(r["hours"]),
                         ]
                     )
-        content = write_xlsx(
-            [
-                {
-                    "name": "Summary",
-                    "columns": columns,
-                    "rows": rows,
-                },
-                {"name": "Detail", "columns": detail_columns, "rows": detail_rows},
-            ]
-        )
+        detail_sheet: dict = {
+            "name": "Detail",
+            "columns": detail_columns,
+            "rows": detail_rows,
+            "col_styles": ["text_border", "text_border", "text_border", "text_border", "text_border", "decimal1_border"],
+            "alt_col_styles": ["text_alt", "text_alt", "text_alt", "text_alt", "text_alt", "decimal1_alt"],
+            "freeze_row": 1,
+        }
+
+        content = write_xlsx([summary_sheet, detail_sheet])
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -226,18 +301,18 @@ async def hr_report(
     format: str = Query(default="json", pattern=_FORMAT_PATTERN),
 ):
     report = await reports_service.hr_report(db, month, year)
-    columns = [
-        "employee_id",
-        "name",
-        "department",
-        "designation",
-        "org_level_code",
-        "present_days",
-        "absent_days",
-        "attendance_pct",
-        "leave_days_ytd",
-    ]
-    rows = [[row[c] for c in columns] for row in report["rows"]]
-    if format != "json":
-        return _export_response(report["title"], report["summary"], columns, rows, format)
+    if format == "xlsx":
+        content = reports_service.hr_xlsx(report)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="hr_report.xlsx"'},
+        )
+    if format == "csv":
+        content = reports_service.hr_csv(report)
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="hr_report.csv"'},
+        )
     return report

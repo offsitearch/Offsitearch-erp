@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { getDateAttendance, listUsers, updateAttendance } from '../../api/attendance';
-import { exportDayAttendanceCsv } from './attendanceExport';
+import { downloadReportXlsx } from '../../api/attendance';
 import { ATTENDANCE_METHOD_LABELS, ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_OPTIONS, canAccess } from '../../lib/constants';
 import { formatDate, formatDuration, formatTime, toISODate } from '../../lib/date';
 import type { AttendanceUserRow } from '../../lib/types';
@@ -270,12 +270,12 @@ export default function TodayAttendancePage() {
         </label>
         {isAdmin && (
           <button
-            onClick={() => exportDayAttendanceCsv(rows.data ?? [], date)}
+            onClick={() => downloadReportXlsx(date, date)}
             disabled={rows.isPending || !rows.data?.length}
             className={secondaryBtnClass}
           >
             <Download className="h-4 w-4" />
-            Export CSV
+            Open in Sheets
           </button>
         )}
       </div>
@@ -309,6 +309,7 @@ export default function TodayAttendancePage() {
               <th className="px-4 py-3">{t('attendance.checkOutTime')}</th>
               <th className="px-4 py-3 text-right">{t('attendance.late')}</th>
               <th className="px-4 py-3 text-right">{t('attendance.hours')}</th>
+              <th className="px-4 py-3 text-right">OT</th>
               <th className="px-4 py-3" aria-label="Edit" />
             </tr>
           </thead>
@@ -366,6 +367,9 @@ export default function TodayAttendancePage() {
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-ink">
                     {formatDuration(row.total_hours) || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-warning">
+                    {Number(row.overtime_hours ?? 0) > 0 ? formatDuration(row.overtime_hours) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {isAdmin && (

@@ -147,7 +147,7 @@ export default function MyAttendancePage() {
             dot: 'bg-success',
           }
       : {
-          label: t('dashboard.dayComplete'),
+          label: checkedOut ? 'Checked out' : t('dashboard.dayComplete'),
           bg: 'bg-success/15',
           text: 'text-success',
           dot: 'bg-success',
@@ -238,7 +238,7 @@ export default function MyAttendancePage() {
                 </>
               ) : (
                 <>
-                  <div className="mb-4 grid grid-cols-3 gap-3">
+                  <div className="mb-4 grid grid-cols-4 gap-3">
                     <div className="rounded-lg bg-white/5 px-3 py-2.5 text-center">
                       <p className="text-[10px] font-medium uppercase tracking-wider text-white/40">In</p>
                       <p className="mt-0.5 text-sm font-semibold tabular-nums text-white">
@@ -254,6 +254,12 @@ export default function MyAttendancePage() {
                     <div className="rounded-lg bg-white/5 px-3 py-2.5 text-center">
                       <p className="text-[10px] font-medium uppercase tracking-wider text-white/40">Worked</p>
                       <p className="mt-0.5 text-sm font-semibold tabular-nums text-orange">{worked}</p>
+                    </div>
+                    <div className="rounded-lg bg-white/5 px-3 py-2.5 text-center">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-white/40">OT</p>
+                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-warning">
+                        {formatDuration(todayRecord.overtime_hours ?? null) || '—'}
+                      </p>
                     </div>
                   </div>
                 </>

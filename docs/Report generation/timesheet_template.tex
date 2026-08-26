@@ -1,0 +1,196 @@
+\documentclass[10pt]{article}
+
+% ============================================================
+% PACKAGES
+% ============================================================
+\usepackage[a4paper, top=2.2cm, bottom=2.2cm, left=1.6cm, right=1.6cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{ragged2e}
+\usepackage{lastpage}
+\usepackage{helvet}
+\usepackage{tikz}
+\usepackage{etoolbox}
+\usepackage{multirow}
+\renewcommand{\familydefault}{\sfdefault} % clean sans-serif, modern studio look
+
+% ============================================================
+% COLOR PALETTE (edit to match studio branding)
+% ============================================================
+\definecolor{brandDark}{HTML}{1F2937}   % header text / bars
+\definecolor{brandAccent}{HTML}{B08D57} % warm bronze accent (architecture-firm feel)
+\definecolor{groupWhite}{HTML}{FFFFFF}   % date-group shading, band A
+\definecolor{groupGray}{HTML}{F2F2F2}    % date-group shading, band B
+\definecolor{lineGray}{HTML}{D9D9D9}
+
+% ============================================================
+% VARIABLES -- YOUR APP FILLS THESE IN (simple string replace,
+% or pass with \newcommand before \input{} if using as a template)
+% ============================================================
+\newcommand{\companyName}{VAR_COMPANY_NAME}
+\newcommand{\companyTagline}{VAR_COMPANY_TAGLINE}
+\newcommand{\logoPath}{VAR_LOGO_PATH} % e.g. assets/logo.png -- leave blank to use placeholder mark below
+
+\newcommand{\employeeName}{VAR_EMPLOYEE_NAME}
+\newcommand{\employeeDesignation}{VAR_DESIGNATION}
+\newcommand{\periodFrom}{VAR_DATE_FROM}
+\newcommand{\periodTo}{VAR_DATE_TO}
+\newcommand{\approvedBy}{VAR_APPROVED_BY}
+\newcommand{\reportGeneratedOn}{VAR_GENERATED_DATE}
+\newcommand{\totalHours}{VAR_TOTAL_HOURS}
+
+% ============================================================
+% HEADER / FOOTER
+% ============================================================
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\fancyfoot[L]{\footnotesize\textcolor{gray}{Generated on \reportGeneratedOn}}
+\fancyfoot[C]{\footnotesize\textcolor{gray}{Confidential -- Internal Use Only}}
+\fancyfoot[R]{\footnotesize\textcolor{gray}{Page \thepage\ of \pageref{LastPage}}}
+
+% ============================================================
+% REUSABLE HEADER BLOCK (also repeats on longtable page breaks)
+% ============================================================
+\newcommand{\reportHeader}{%
+  \begin{minipage}{0.18\textwidth}
+    \ifdefempty{\logoPath}{%
+      % Placeholder logo mark if no logo path is supplied
+      \tikz{\node[draw=brandDark, thick, minimum width=1.5cm, minimum height=1.5cm, align=center, font=\bfseries\large, text=brandDark]{LOGO};}
+    }{%
+      \includegraphics[width=1.6cm]{\logoPath}
+    }
+  \end{minipage}%
+  \begin{minipage}{0.80\textwidth}
+    \raggedleft
+    {\Large\bfseries\textcolor{brandDark}{\companyName}}\\[2pt]
+    {\small\textcolor{gray}{\companyTagline}}
+  \end{minipage}
+
+  \vspace{6pt}
+  {\color{brandAccent}\rule{\linewidth}{2pt}}
+  \vspace{4pt}
+
+  \begin{center}
+    {\large\bfseries\textcolor{brandDark}{TIMESHEET REPORT}}
+  \end{center}
+
+  \vspace{4pt}
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}p{0.24\textwidth}p{0.26\textwidth}p{0.22\textwidth}p{0.22\textwidth}@{}}
+    \textbf{\small Employee Name:} & \small\employeeName &
+    \textbf{\small Period:} & \small\periodFrom\ -- \periodTo \\
+    \textbf{\small Designation:} & \small\employeeDesignation &
+    \textbf{\small Approved By:} & \small\approvedBy \\
+  \end{tabular}
+
+  \vspace{6pt}
+  {\color{lineGray}\rule{\linewidth}{0.6pt}}
+  \vspace{4pt}
+}
+
+% ============================================================
+% DATE-GROUP ROW MACROS
+% ------------------------------------------------------------
+% An employee can log multiple entries on the same date. These
+% entries are grouped visually: the Date cell is merged (spans
+% all entries for that date) and the whole group shares ONE
+% background color. Consecutive date groups alternate between
+% groupWhite and groupGray so each day is visually distinct.
+%
+% \dategroupfirst{color}{numEntries}{date}{hours}{project}{location}{description}
+%   -> first (or only) row of a date group. Draws the merged date cell.
+% \dategroupnext{color}{hours}{project}{location}{description}
+%   -> additional entries for the SAME date (no date cell -- it's merged).
+%
+% Usage for a day with 3 entries (see ROWS section below for a
+% full worked example):
+%   \dategroupfirst{groupGray}{3}{01 Aug}{8.0}{Verde Residency}{Site -- 2nd Floor}{Coordinated ...}
+%   \dategroupnext{groupGray}{7.5}{Verde Residency}{Studio}{Prepared ...}
+%   \dategroupnext{groupGray}{3.0}{Internal}{Studio}{Updated ...}
+%   \cmidrule(lr){1-5}
+% Then flip to groupWhite for the next date, and so on.
+% ============================================================
+\newcommand{\dategroupfirst}[7]{%
+  \rowcolor{#1}\multirow{#2}{*}{#3} & #4 & #5 & #6 & #7 \\
+}
+\newcommand{\dategroupnext}[5]{%
+  \rowcolor{#1} & #2 & #3 & #4 & #5 \\
+}
+
+% ============================================================
+% DOCUMENT
+% ============================================================
+\begin{document}
+\thispagestyle{fancy}
+
+\reportHeader
+
+\renewcommand{\arraystretch}{1.4}
+\begin{longtable}{
+    @{}
+    >{\centering\arraybackslash}p{1.8cm}   % Date
+    >{\centering\arraybackslash}p{1.6cm}   % Hours
+    >{\RaggedRight\arraybackslash}p{3.0cm} % Project
+    >{\RaggedRight\arraybackslash}p{3.0cm} % Location
+    >{\RaggedRight\arraybackslash}p{7.4cm} % Description
+    @{}
+}
+
+% ---- table header (repeats every page) ----
+\rowcolor{brandDark}
+\textcolor{white}{\bfseries Date} &
+\textcolor{white}{\bfseries Hours} &
+\textcolor{white}{\bfseries Project} &
+\textcolor{white}{\bfseries Location} &
+\textcolor{white}{\bfseries Work Description} \\
+\midrule
+\endfirsthead
+
+\rowcolor{brandDark}
+\textcolor{white}{\bfseries Date} &
+\textcolor{white}{\bfseries Hours} &
+\textcolor{white}{\bfseries Project} &
+\textcolor{white}{\bfseries Location} &
+\textcolor{white}{\bfseries Work Description} \\
+\midrule
+\endhead
+
+\midrule
+\multicolumn{5}{r}{\footnotesize\textit{continued on next page}}\\
+\endfoot
+
+\bottomrule
+\endlastfoot
+
+% ============================================================
+% ROWS_START -- your app injects rows here, grouped by date.
+% For EACH date (in order):
+%   1. Pick a group color: alternate groupGray / groupWhite as
+%      you move from one date to the next.
+%   2. First entry of that date -> \dategroupfirst{color}{N}{date}{hours}{project}{location}{description}
+%      where N = number of entries logged on that date.
+%   3. Remaining entries of that SAME date -> \dategroupnext{color}{hours}{project}{location}{description}
+%   4. After the last entry of the date -> \cmidrule(lr){1-5}
+% See the sample block below for a fully worked example
+% (3 entries on one date, 1 entry on the next, etc.)
+% ============================================================
+VAR_TABLE_ROWS
+% ============================================================
+% ROWS_END
+% ============================================================
+
+\end{longtable}
+
+\vspace{8pt}
+\begin{flushright}
+\textbf{Total Hours: \totalHours}
+\end{flushright}
+
+\end{document}

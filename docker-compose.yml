@@ -38,6 +38,7 @@ services:
       - ./backend/tests:/app/tests
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/.importlinter:/app/.importlinter
+      - ./backend/templates:/app/templates
       - uploads:/app/uploads
     depends_on:
       db:

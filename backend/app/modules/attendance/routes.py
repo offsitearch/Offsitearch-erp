@@ -28,11 +28,9 @@ from app.modules.attendance.schemas import (
 )
 from app.modules.identity.schemas import MessageResponse, UserOut
 from app.modules.attendance import service as attendance_service
-from app.modules.attendance.service import _attendance_sheets
 from app.modules.audit.service import log_audit
 from app.utils.enums import AttendanceStatus
 from app.utils.errors import AttendanceError
-from app.utils.xlsx import write_xlsx
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -197,7 +195,7 @@ async def report(
     rows = await attendance_service.report_rows(db, from_date, to_date, department_id)
 
     if format == "xlsx":
-        content = write_xlsx(_attendance_sheets(rows))
+        content = attendance_service.attendance_xlsx(rows, from_date, to_date)
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -205,47 +203,11 @@ async def report(
         )
 
     if format == "csv":
-        import csv
-        import io
-
         from fastapi.responses import StreamingResponse
 
-        buffer = io.StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow(
-            [
-                "date",
-                "employee_id",
-                "user_name",
-                "department",
-                "designation",
-                "phone",
-                "status",
-                "check_in_time",
-                "check_out_time",
-                "late_minutes",
-                "total_hours",
-            ]
-        )
-        for row in rows:
-            writer.writerow(
-                [
-                    row["date"],
-                    row["employee_id"],
-                    row["user_name"],
-                    row["department"],
-                    row["designation"],
-                    row["phone"] or "N/A",
-                    row["status"],
-                    row["check_in_time"].isoformat() if row["check_in_time"] else "",
-                    row["check_out_time"].isoformat() if row["check_out_time"] else "",
-                    row["late_minutes"],
-                    row["total_hours"],
-                ]
-            )
-        buffer.seek(0)
+        content = attendance_service.attendance_csv(rows, from_date, to_date)
         return StreamingResponse(
-            iter([buffer.getvalue()]),
+            iter([content]),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=attendance_report.csv"},
         )

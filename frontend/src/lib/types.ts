@@ -64,6 +64,7 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   late_minutes: number;
   total_hours: string | null;
+  overtime_hours: string | null;
   check_in_method: AttendanceMethod;
   check_in_location: string | null;
   notes: string | null;
@@ -103,6 +104,7 @@ export interface ReportRow {
   check_out_time: string | null;
   late_minutes: number;
   total_hours: string | null;
+  overtime_hours: string | null;
 }
 
 export interface UserBrief {
@@ -1063,6 +1065,7 @@ export interface TimesheetReportGroup {
     date: string | null;
     project: string;
     description: string | null;
+    location: string | null;
     hours: number;
   }>;
 }
@@ -1073,6 +1076,7 @@ export interface TimesheetReportEmployee {
   employee_name: string;
   department: string | null;
   total_hours: number;
+  approved_by_name: string;
   groups: TimesheetReportGroup[];
 }
 

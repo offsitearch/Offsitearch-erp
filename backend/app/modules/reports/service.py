@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.utils.shared import now_local
 
@@ -46,13 +47,61 @@ def _month_end(year: int, month: int) -> date:
     return date(year, month + 1, 1) - date.resolution
 
 
+# ── Formatting helpers ──────────────────────────────────────────
+
+
 def _summary_rows(summary: dict) -> list[list]:
     return [[str(key), value] for key, value in summary.items()]
 
 
+def _title_row(title: str, num_cols: int) -> list[tuple[str, str | None]]:
+    return [(title, "title")] + [("", None)] * (num_cols - 1)
+
+
+def _subtitle_row(text: str, num_cols: int) -> list[tuple[str, str | None]]:
+    return [(text, "subtitle")] + [("", None)] * (num_cols - 1)
+
+
+def _section_row(text: str, num_cols: int) -> list[tuple[str, str | None]]:
+    return [(text, "section")] + [("", None)] * (num_cols - 1)
+
+
+def _kpi_rows(summary_items: list[tuple[str, str | int | float]], num_cols: int) -> list[list[tuple[str, str | None]]]:
+    """Build 1-2 rows of KPI cards from (label, formatted_value) pairs."""
+    rows: list[list[tuple[str, str | None]]] = []
+    for label, value in summary_items:
+        rows.append([(label, "summary_label"), (str(value), "summary_value")] + [("", None)] * (num_cols - 2))
+    return rows
+
+
+def _fmt_money(v: int | float | Decimal | None) -> str:
+    if v is None:
+        return "\u20b90.00"
+    return f"\u20b9{float(v):,.2f}"
+
+
+def _fmt_int(v: int | float | Decimal | None) -> str:
+    if v is None:
+        return "0"
+    return f"{int(float(v)):,}"
+
+
+def _fmt_pct(v: float | None) -> str:
+    if v is None:
+        return "N/A"
+    return f"{v:.1f}%"
+
+
 def _to_xlsx(title: str, summary: dict, columns: list[str], rows: list[list]) -> bytes:
-    sheets = [{"name": "Summary", "columns": ["Metric", "Value"], "rows": _summary_rows(summary)}]
-    sheets.append({"name": "Detail", "columns": columns, "rows": rows})
+    """Legacy simple builder — still used for basic exports."""
+    sheets: list[dict] = [
+        {
+            "name": "Summary",
+            "columns": ["Metric", "Value"],
+            "rows": _summary_rows(summary),
+        },
+        {"name": "Detail", "columns": columns, "rows": rows},
+    ]
     return write_xlsx(sheets)
 
 
@@ -67,6 +116,36 @@ def _to_csv(columns: list[str], rows: list[list]) -> str:
         writer.writerow(row)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def _to_rich_csv(
+    title: str,
+    subtitle: str,
+    summary_items: list[tuple[str, str]],
+    columns: list[str],
+    rows: list[list],
+) -> str:
+    """Attractive CSV with title, summary, and separator before data."""
+    import csv
+    import io
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([title])
+    writer.writerow([subtitle])
+    writer.writerow([])
+    for label, value in summary_items:
+        writer.writerow([label, value])
+    writer.writerow([])
+    writer.writerow([])
+    writer.writerow(columns)
+    for row in rows:
+        writer.writerow(row)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ── Projects Report ─────────────────────────────────────────────
 
 
 async def projects_report(
@@ -129,6 +208,118 @@ async def projects_report(
         "total_hours": total_hours,
     }
     return {"title": "Projects Report", "summary": summary, "rows": detail}
+
+
+def projects_xlsx(report: dict, title: str = "Projects Report") -> bytes:
+    """Professional XLSX for projects report."""
+    today = now_local().date().isoformat()
+    columns = [
+        "Project Code", "Project Name", "Client", "Type", "Status",
+        "Progress %", "Budget", "Studio Fee", "Expenses", "Hours Logged",
+    ]
+    col_formats = [None, None, None, None, None, "percent", "currency", "currency", "currency", "integer"]
+    col_styles = ["text_border", "text_border", "text_border", "text_border", "text_border",
+                  "percent_border", "currency_border", "currency_border", "currency_border", "integer_border"]
+    alt_col_styles = ["text_alt", "text_alt", "text_alt", "text_alt", "text_alt",
+                      "percent_alt", "currency_alt", "currency_alt", "currency_alt", "integer_alt"]
+
+    rows = [
+        [
+            r["project_code"], r["name"], r["client_name"] or "—",
+            r["project_type"], r["status"],
+            float(r["progress_pct"] or 0) / 100 if r["progress_pct"] else 0,
+            float(r["budget"]), float(r["studio_fee"]),
+            float(r["expenses"]), r["hours_logged"],
+        ]
+        for r in report["rows"]
+    ]
+
+    s = report["summary"]
+    total_profit = float(s["total_studio_fee"]) - float(s["total_expenses"])
+    kpi_items = [
+        ("Total Projects", _fmt_int(s["total_projects"])),
+        ("Active Projects", _fmt_int(s["active_projects"])),
+        ("Total Budget", _fmt_money(s["total_budget"])),
+        ("Studio Fees", _fmt_money(s["total_studio_fee"])),
+        ("Total Expenses", _fmt_money(s["total_expenses"])),
+        ("Net Profit", _fmt_money(total_profit)),
+        ("Total Hours", _fmt_int(s["total_hours"])),
+    ]
+
+    num_cols = len(columns)
+    extra_before = [
+        _title_row(title, num_cols),
+        _subtitle_row(f"Generated: {today}", num_cols),
+        [("", None)] * num_cols,
+        _section_row("Key Metrics", num_cols),
+    ]
+    extra_before.extend(_kpi_rows(kpi_items, num_cols))
+    extra_before.append([("", None)] * num_cols)
+    extra_before.append(_section_row("Project Details", num_cols))
+
+    # Total row
+    total_row: list[tuple[str, str | None]] = [
+        ("TOTAL", "subtotal"),
+        ("", None), ("", None), ("", None), ("", None),
+        (None, None),
+        (_fmt_money(s["total_budget"]), "subtotal_currency"),
+        (_fmt_money(s["total_studio_fee"]), "subtotal_currency"),
+        (_fmt_money(s["total_expenses"]), "subtotal_currency"),
+        (_fmt_int(s["total_hours"]), "subtotal"),
+    ]
+
+    return write_xlsx([{
+        "name": "Projects",
+        "columns": columns,
+        "rows": rows,
+        "col_styles": col_styles,
+        "alt_col_styles": alt_col_styles,
+        "col_formats": col_formats,
+        "freeze_row": len(extra_before) + 1,
+        "extra_rows_before": extra_before,
+        "extra_rows_after": [total_row],
+    }])
+
+
+def projects_csv(report: dict) -> str:
+    """Attractive CSV for projects report."""
+    today = now_local().date().isoformat()
+    s = report["summary"]
+    total_profit = float(s["total_studio_fee"]) - float(s["total_expenses"])
+    columns = [
+        "Project Code", "Project Name", "Client", "Type", "Status",
+        "Progress %", "Budget", "Studio Fee", "Expenses", "Hours Logged",
+    ]
+    rows = [
+        [
+            r["project_code"], r["name"], r["client_name"] or "—",
+            r["project_type"], r["status"],
+            f"{r['progress_pct'] or 0}%",
+            f"\u20b9{float(r['budget']):,.2f}",
+            f"\u20b9{float(r['studio_fee']):,.2f}",
+            f"\u20b9{float(r['expenses']):,.2f}",
+            r["hours_logged"],
+        ]
+        for r in report["rows"]
+    ]
+    return _to_rich_csv(
+        title="Projects Report",
+        subtitle=f"Generated: {today}",
+        summary_items=[
+            ("Total Projects", _fmt_int(s["total_projects"])),
+            ("Active Projects", _fmt_int(s["active_projects"])),
+            ("Total Budget", _fmt_money(s["total_budget"])),
+            ("Studio Fees", _fmt_money(s["total_studio_fee"])),
+            ("Total Expenses", _fmt_money(s["total_expenses"])),
+            ("Net Profit", _fmt_money(total_profit)),
+            ("Total Hours", _fmt_int(s["total_hours"])),
+        ],
+        columns=columns,
+        rows=rows,
+    )
+
+
+# ── Finance Report ──────────────────────────────────────────────
 
 
 async def finance_report(db: AsyncSession, period: str = "month") -> dict:
@@ -227,6 +418,153 @@ async def finance_report(db: AsyncSession, period: str = "month") -> dict:
     }
 
 
+def finance_xlsx(report: dict) -> bytes:
+    """Professional XLSX for finance report with multiple sections."""
+    today_str = now_local().date().isoformat()
+    s = report["summary"]
+    period_label = {"month": "Monthly", "quarter": "Quarterly", "year": "Annual", "all": "All-Time"}.get(s["period"], s["period"])
+
+    # ── Sheet 1: Executive Summary ──────────────────────────────
+    num_cols = 6
+    kpi_items = [
+        ("Invoiced", _fmt_money(s["invoiced"])),
+        ("Received", _fmt_money(s["received"])),
+        ("Outstanding", _fmt_money(s["outstanding"])),
+        ("Expenses", _fmt_money(s["expenses"])),
+        ("Net Profit", _fmt_money(s["profit"])),
+        ("Invoice Count", _fmt_int(s["invoice_count"])),
+    ]
+    aging = report["aging"]
+    aging_items = [
+        ("0-30 Days", _fmt_money(aging["0_30"])),
+        ("31-60 Days", _fmt_money(aging["31_60"])),
+        ("61-90 Days", _fmt_money(aging["61_90"])),
+        ("90+ Days", _fmt_money(aging["90_plus"])),
+    ]
+    expense_items = [(e["category"], _fmt_money(e["amount"])) for e in report.get("expense_rows", [])]
+
+    extra_before: list[list[tuple[str, str | None]]] = [
+        _title_row(f"{period_label} Finance Report", num_cols),
+        _subtitle_row(f"Period: {s['from']} to {s['to']}  |  Generated: {today_str}", num_cols),
+        [("", None)] * num_cols,
+        _section_row("Revenue & Cash Flow", num_cols),
+    ]
+    extra_before.extend(_kpi_rows(kpi_items, num_cols))
+    extra_before.append([("", None)] * num_cols)
+    extra_before.append(_section_row("Accounts Receivable Aging", num_cols))
+    extra_before.extend(_kpi_rows(aging_items, num_cols))
+    if expense_items:
+        extra_before.append([("", None)] * num_cols)
+        extra_before.append(_section_row("Expenses by Category", num_cols))
+        extra_before.extend(_kpi_rows(expense_items, num_cols))
+
+    summary_sheet: dict = {
+        "name": "Summary",
+        "columns": ["", "", "", "", "", ""],
+        "rows": [],
+        "extra_rows_before": extra_before,
+        "freeze_row": 0,
+    }
+
+    # ── Sheet 2: Invoice Detail ─────────────────────────────────
+    inv_columns = ["Invoice #", "Client", "Invoice Date", "Due Date", "Total", "Paid", "Outstanding", "Status"]
+    inv_col_styles = ["text_border", "text_border", "date_border", "date_border",
+                      "currency_border", "currency_border", "currency_border", "text_border"]
+    inv_alt_col_styles = ["text_alt", "text_alt", "date_alt", "date_alt",
+                          "currency_alt", "currency_alt", "currency_alt", "text_alt"]
+
+    inv_rows = [
+        [
+            r["invoice_number"], r["client_name"] or "—",
+            str(r["invoice_date"]), str(r["due_date"]),
+            float(r["total"]), float(r["paid_amount"]),
+            float(r["outstanding"]), r["status"],
+        ]
+        for r in report["rows"]
+    ]
+
+    inv_total_row: list[tuple[str, str | None]] = [
+        ("TOTAL", "subtotal"),
+        ("", None), ("", None), ("", None),
+        (_fmt_money(s["invoiced"]), "subtotal_currency"),
+        (_fmt_money(s["received"]), "subtotal_currency"),
+        (_fmt_money(s["outstanding"]), "subtotal_currency"),
+        ("", None),
+    ]
+
+    invoice_sheet: dict = {
+        "name": "Invoices",
+        "columns": inv_columns,
+        "rows": inv_rows,
+        "col_styles": inv_col_styles,
+        "alt_col_styles": inv_alt_col_styles,
+        "freeze_row": 1,
+        "extra_rows_after": [inv_total_row],
+    }
+
+    sheets: list[dict] = [summary_sheet, invoice_sheet]
+
+    # ── Sheet 3: Expense Breakdown (if present) ─────────────────
+    if report.get("expense_rows"):
+        exp_columns = ["Category", "Amount"]
+        exp_rows = [[e["category"], float(e["amount"])] for e in report["expense_rows"]]
+        sheets.append({
+            "name": "Expenses",
+            "columns": exp_columns,
+            "rows": exp_rows,
+            "col_styles": ["text_border", "currency_border"],
+            "alt_col_styles": ["text_alt", "currency_alt"],
+            "freeze_row": 1,
+        })
+
+    return write_xlsx(sheets)
+
+
+def finance_csv(report: dict) -> str:
+    """Attractive CSV for finance report."""
+    s = report["summary"]
+    aging = report["aging"]
+    period_label = {"month": "Monthly", "quarter": "Quarterly", "year": "Annual", "all": "All-Time"}.get(s["period"], s["period"])
+
+    columns = ["Invoice #", "Client", "Invoice Date", "Due Date", "Total", "Paid", "Outstanding", "Status"]
+    rows = [
+        [
+            r["invoice_number"], r["client_name"] or "—",
+            str(r["invoice_date"]), str(r["due_date"]),
+            f"\u20b9{float(r['total']):,.2f}", f"\u20b9{float(r['paid_amount']):,.2f}",
+            f"\u20b9{float(r['outstanding']):,.2f}", r["status"],
+        ]
+        for r in report["rows"]
+    ]
+
+    summary_items = [
+        ("Period", f"{s['from']} to {s['to']}"),
+        ("Invoiced", _fmt_money(s["invoiced"])),
+        ("Received", _fmt_money(s["received"])),
+        ("Outstanding", _fmt_money(s["outstanding"])),
+        ("Expenses", _fmt_money(s["expenses"])),
+        ("Net Profit", _fmt_money(s["profit"])),
+        ("", ""),
+        ("AGING: 0-30 Days", _fmt_money(aging["0_30"])),
+        ("AGING: 31-60 Days", _fmt_money(aging["31_60"])),
+        ("AGING: 61-90 Days", _fmt_money(aging["61_90"])),
+        ("AGING: 90+ Days", _fmt_money(aging["90_plus"])),
+    ]
+    for e in report.get("expense_rows", []):
+        summary_items.append((f"EXPENSE: {e['category']}", _fmt_money(e["amount"])))
+
+    return _to_rich_csv(
+        title=f"{period_label} Finance Report",
+        subtitle=f"Generated: {now_local().date().isoformat()}",
+        summary_items=summary_items,
+        columns=columns,
+        rows=rows,
+    )
+
+
+# ── HR Report ───────────────────────────────────────────────────
+
+
 async def hr_report(db: AsyncSession, month: int, year: int) -> dict:
     dept_stmt = (
         select(Department.name, func.count(User.id))
@@ -265,7 +603,6 @@ async def hr_report(db: AsyncSession, month: int, year: int) -> dict:
         AttendanceStatus.WORK_FROM_HOME,
     )
 
-    # Batch-fetch all attendance records for the month (eliminates N+1)
     user_ids = [user.id for user, _, _ in user_rows]
     att_stmt = select(Attendance.user_id, Attendance.status).where(
         Attendance.user_id.in_(user_ids),
@@ -277,7 +614,6 @@ async def hr_report(db: AsyncSession, month: int, year: int) -> dict:
     for uid, status in att_rows:
         att_by_user.setdefault(uid, []).append(status)
 
-    # Batch-fetch leave totals for all users (eliminates N+1)
     leave_stmt = (
         select(Leave.user_id, func.coalesce(func.sum(Leave.total_days), 0))
         .where(
@@ -335,6 +671,143 @@ async def hr_report(db: AsyncSession, month: int, year: int) -> dict:
     }
 
 
+def hr_xlsx(report: dict) -> bytes:
+    """Professional XLSX for HR report with summary, headcount, and detail."""
+    today_str = now_local().date().isoformat()
+    s = report["summary"]
+    month_name = date(s["year"], s["month"], 1).strftime("%B %Y")
+
+    # ── Sheet 1: Executive Summary ──────────────────────────────
+    num_cols = 6
+    kpi_items = [
+        ("Total Employees", _fmt_int(s["total_employees"])),
+        ("Present Days", _fmt_int(s["total_present_days"])),
+        ("Absent Days", _fmt_int(s["total_absent_days"])),
+        ("Avg Attendance", _fmt_pct(s["avg_attendance_pct"])),
+    ]
+
+    dept_items = [(d["department"], str(d["count"])) for d in report.get("headcount_dept", [])]
+    level_items = [(lv["level"], str(lv["count"])) for lv in report.get("headcount_level", [])]
+
+    extra_before: list[list[tuple[str, str | None]]] = [
+        _title_row("HR Report", num_cols),
+        _subtitle_row(f"{month_name}  |  Generated: {today_str}", num_cols),
+        [("", None)] * num_cols,
+        _section_row("Workforce Overview", num_cols),
+    ]
+    extra_before.extend(_kpi_rows(kpi_items, num_cols))
+    if dept_items:
+        extra_before.append([("", None)] * num_cols)
+        extra_before.append(_section_row("Headcount by Department", num_cols))
+        extra_before.extend(_kpi_rows(dept_items, num_cols))
+    if level_items:
+        extra_before.append([("", None)] * num_cols)
+        extra_before.append(_section_row("Headcount by Level", num_cols))
+        extra_before.extend(_kpi_rows(level_items, num_cols))
+
+    summary_sheet: dict = {
+        "name": "Summary",
+        "columns": ["", "", "", "", "", ""],
+        "rows": [],
+        "extra_rows_before": extra_before,
+        "freeze_row": 0,
+    }
+
+    # ── Sheet 2: Employee Detail ────────────────────────────────
+    detail_columns = [
+        "Employee ID", "Name", "Department", "Designation", "Level",
+        "Present Days", "Absent Days", "Attendance %", "Leaves (YTD)",
+    ]
+    detail_col_styles = [
+        "text_border", "text_border", "text_border", "text_border", "text_border",
+        "integer_border", "integer_border", "percent_border", "decimal1_border",
+    ]
+    detail_alt_col_styles = [
+        "text_alt", "text_alt", "text_alt", "text_alt", "text_alt",
+        "integer_alt", "integer_alt", "percent_alt", "decimal1_alt",
+    ]
+
+    detail_rows = [
+        [
+            r["employee_id"], r["name"], r["department"] or "—",
+            r["designation"] or "—", r["org_level_code"] or "—",
+            r["present_days"], r["absent_days"],
+            float(r["attendance_pct"] or 0) / 100 if r["attendance_pct"] is not None else None,
+            float(r["leave_days_ytd"]),
+        ]
+        for r in report["rows"]
+    ]
+
+    total_present = sum(r["present_days"] for r in report["rows"])
+    total_absent = sum(r["absent_days"] for r in report["rows"])
+    total_leaves = sum(r["leave_days_ytd"] for r in report["rows"])
+    avg_att = round(total_present / (total_present + total_absent) * 100, 1) if (total_present + total_absent) else 0
+
+    total_row: list[tuple[str, str | None]] = [
+        ("TOTAL", "subtotal"),
+        ("", None), ("", None), ("", None), ("", None),
+        (str(total_present), "subtotal"),
+        (str(total_absent), "subtotal"),
+        (f"{avg_att:.1f}%", "subtotal"),
+        (f"{total_leaves:.1f}", "subtotal"),
+    ]
+
+    detail_sheet: dict = {
+        "name": "Employee Detail",
+        "columns": detail_columns,
+        "rows": detail_rows,
+        "col_styles": detail_col_styles,
+        "alt_col_styles": detail_alt_col_styles,
+        "freeze_row": 1,
+        "extra_rows_after": [total_row],
+    }
+
+    return write_xlsx([summary_sheet, detail_sheet])
+
+
+def hr_csv(report: dict) -> str:
+    """Attractive CSV for HR report."""
+    today_str = now_local().date().isoformat()
+    s = report["summary"]
+    month_name = date(s["year"], s["month"], 1).strftime("%B %Y")
+
+    columns = [
+        "Employee ID", "Name", "Department", "Designation", "Level",
+        "Present Days", "Absent Days", "Attendance %", "Leaves (YTD)",
+    ]
+    rows = [
+        [
+            r["employee_id"], r["name"], r["department"] or "—",
+            r["designation"] or "—", r["org_level_code"] or "—",
+            r["present_days"], r["absent_days"],
+            f"{r['attendance_pct']}%" if r["attendance_pct"] is not None else "N/A",
+            f"{r['leave_days_ytd']:.1f}",
+        ]
+        for r in report["rows"]
+    ]
+
+    summary_items = [
+        ("Month", month_name),
+        ("Total Employees", _fmt_int(s["total_employees"])),
+        ("Total Present Days", _fmt_int(s["total_present_days"])),
+        ("Total Absent Days", _fmt_int(s["total_absent_days"])),
+        ("Avg Attendance", _fmt_pct(s["avg_attendance_pct"])),
+    ]
+    for d in report.get("headcount_dept", []):
+        summary_items.append((f"DEPT: {d['department']}", str(d["count"])))
+
+    return _to_rich_csv(
+        title="HR Report",
+        subtitle=f"{month_name}  |  Generated: {today_str}",
+        summary_items=summary_items,
+        columns=columns,
+        rows=rows,
+    )
+
+
+# ── Timesheets Report ───────────────────────────────────────────
+
+
 async def timesheets_report(
     db: AsyncSession,
     from_date: date,
@@ -342,7 +815,7 @@ async def timesheets_report(
     department_id: int | None = None,
     employee_id: int | None = None,
 ) -> dict:
-    """Hours logged per project × employee in a date range."""
+    """Hours logged per project x employee in a date range."""
     stmt = (
         select(
             Project.project_code,
@@ -369,16 +842,16 @@ async def timesheets_report(
     total_hours = Decimal("0")
     employees: set[str] = set()
     projects: set[str] = set()
-    for project_code, project_name, employee_id, employee_name, hours in rows:
+    for project_code, project_name, emp_id, employee_name, hours in rows:
         total_hours += Decimal(str(hours))
-        if employee_id:
-            employees.add(employee_id)
+        if emp_id:
+            employees.add(emp_id)
         projects.add(project_name or project_code or "Unassigned")
         detail.append(
             {
                 "project_code": project_code,
                 "project_name": project_name or "Unassigned",
-                "employee_id": employee_id,
+                "employee_id": emp_id,
                 "employee_name": employee_name,
                 "hours": float(Decimal(str(hours)).normalize()),
             }
@@ -395,7 +868,6 @@ async def timesheets_report(
 
 
 def _period_key(entry_date: date, group_by: str) -> date:
-    """Normalise a date to its day/week(Monday)/month bucket."""
     if group_by == "week":
         return entry_date - timedelta(days=entry_date.weekday())
     if group_by == "month":
@@ -406,7 +878,7 @@ def _period_key(entry_date: date, group_by: str) -> date:
 def _period_label(period: date, group_by: str) -> str:
     if group_by == "week":
         end = period + timedelta(days=6)
-        return f"Week of {period.strftime('%d %b')} – {end.strftime('%d %b %Y')}"
+        return f"Week of {period.strftime('%d %b')} - {end.strftime('%d %b %Y')}"
     if group_by == "month":
         return period.strftime("%B %Y")
     return period.strftime("%a %d %b %Y")
@@ -420,14 +892,6 @@ async def timesheets_detail(
     employee_id: int | None = None,
     group_by: str = "day",
 ) -> dict:
-    """Per-employee timesheet detail for a range, grouped by day/week/month.
-
-    ``employees`` sections are designed for sectioned PDF export (one
-    fresh page per employee; long employees flow across pages) and the
-    frontend's per-employee cards. The flat ``rows`` aggregate from
-    :func:`timesheets_report` is included unchanged so CSV/XLSX exports
-    keep working.
-    """
     stmt = (
         select(
             TimesheetEntry,
@@ -489,17 +953,16 @@ async def timesheets_detail(
         projects.add(project_name or "Unassigned")
 
         if group_by == "day":
-            # Entry-level lines: every logged task is visible.
             group["rows"].append(
                 {
                     "date": entry.date.isoformat(),
                     "project": project_name or "Unassigned",
                     "description": entry.description or "",
+                    "location": entry.location or "",
                     "hours": float(hours.normalize()),
                 }
             )
         else:
-            # Week/month views roll entries up per project within the period.
             key = project_name or "Unassigned"
             agg = group["_projects"].get(key)
             if agg is None:
@@ -507,6 +970,7 @@ async def timesheets_detail(
                     "date": None,
                     "project": key,
                     "description": None,
+                    "location": None,
                     "hours": Decimal("0"),
                 }
                 group["rows"].append(agg)
@@ -543,6 +1007,99 @@ async def timesheets_detail(
             }
         )
 
+    approvers: dict[int, str] = {}
+    if employees_out:
+        emp_ids = [e["user_id"] for e in employees_out]
+        approver_alias = aliased(User)
+        approver_rows = (
+            await db.execute(
+                select(Timesheet.user_id, approver_alias.name, Timesheet.approved_at)
+                .select_from(Timesheet)
+                .join(approver_alias, approver_alias.id == Timesheet.approved_by)
+                .where(
+                    Timesheet.user_id.in_(emp_ids),
+                    Timesheet.approved_by.isnot(None),
+                    Timesheet.approved_at.isnot(None),
+                )
+                .order_by(Timesheet.approved_at.desc())
+            )
+        ).all()
+        for uid, name, _ in approver_rows:
+            approvers.setdefault(uid, name)
+    for emp in employees_out:
+        emp["approved_by_name"] = approvers.get(emp["user_id"], "")
+
+    if employees_out:
+        emp_ids = [e["user_id"] for e in employees_out]
+        leave_stmt = (
+            select(
+                Leave.user_id,
+                Leave.from_date,
+                Leave.to_date,
+                Leave.half_day_first,
+                Leave.half_day_second,
+            )
+            .where(
+                Leave.status == LeaveStatus.APPROVED,
+                Leave.from_date <= to_date,
+                Leave.to_date >= from_date,
+                Leave.user_id.in_(emp_ids),
+            )
+        )
+        leave_rows = (await db.execute(leave_stmt)).all()
+
+        leave_map: dict[int, list[tuple[date, date, bool, bool]]] = {}
+        for uid, lf, lt, hdf, hds in leave_rows:
+            leave_map.setdefault(uid, []).append((lf, lt, hdf, hds))
+
+        hours_by_emp: dict[int, dict[date, float]] = {}
+        for emp in employees_out:
+            hours_by_emp[emp["user_id"]] = {}
+        for emp in people.values():
+            uid = emp["user_id"]
+            for period_key, grp in emp["_groups"].items():
+                for r in grp["rows"]:
+                    if r.get("date"):
+                        d = date.fromisoformat(r["date"])
+                        hours_by_emp.setdefault(uid, {})
+                        hours_by_emp[uid][d] = hours_by_emp[uid].get(d, 0.0) + float(r["hours"])
+
+        for emp in employees_out:
+            uid = emp["user_id"]
+            cal_days = []
+            d = from_date
+            while d <= to_date:
+                is_weekend = d.weekday() >= 5
+                day_hours = hours_by_emp.get(uid, {}).get(d, 0.0)
+                day_label = d.strftime("%a")
+
+                status = "absent"
+                if is_weekend:
+                    status = "weekend_work" if day_hours > 0 else "weekend_off"
+                else:
+                    if day_hours > 0:
+                        status = "present"
+                    else:
+                        for lf, lt, hdf, hds in leave_map.get(uid, []):
+                            if lf <= d <= lt:
+                                if hdf and d == lf:
+                                    status = "half_day_leave"
+                                elif hds and d == lt:
+                                    status = "half_day_leave"
+                                else:
+                                    status = "leave"
+                                break
+
+                cal_days.append({
+                    "date": d.isoformat(),
+                    "day": day_label,
+                    "hours": round(day_hours, 2),
+                    "status": status,
+                })
+                d += timedelta(days=1)
+
+            emp["calendar"] = cal_days
+
     summary = {
         "from": from_date.isoformat(),
         "to": to_date.isoformat(),
@@ -565,12 +1122,6 @@ async def timesheet_employee_options(
     db: AsyncSession,
     department_id: int | None = None,
 ) -> list[dict]:
-    """Active employees for the timesheet report filter dropdowns.
-
-    Deliberately unpaginated and permission-light (the report itself is
-    already L2+): the generic /employees list is L3+ with a hard
-    page-size cap, which left L2 viewers with an empty picker.
-    """
     stmt = (
         select(User.id, User.name, User.employee_id)
         .where(User.is_active.is_(True))

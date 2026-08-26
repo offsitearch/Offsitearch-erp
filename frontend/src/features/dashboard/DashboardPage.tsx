@@ -461,7 +461,7 @@ export default function DashboardPage() {
   const checkedOut = Boolean(todayRecord?.check_out_time);
   const dayState = !checkedIn ? 'not-in' : checkedOut ? 'complete' : 'working';
   const dayStatusDot = dayState === 'not-in' ? 'bg-warning' : dayState === 'working' ? 'bg-success' : 'bg-success';
-  const dayStatusLabel = dayState === 'not-in' ? 'Not checked in' : dayState === 'working' ? 'Working' : 'Day complete';
+  const dayStatusLabel = dayState === 'not-in' ? 'Not checked in' : dayState === 'working' ? 'Working' : 'Checked out';
   const dayTotalHours =
     formatDuration(todayRecord?.total_hours ?? null) ||
     hoursBetween(todayRecord?.check_in_time ?? null, todayRecord?.check_out_time ?? null);
@@ -1212,7 +1212,12 @@ export default function DashboardPage() {
                       </p>
                     )}
                     {dayState === 'complete' && (
-                      <p className="text-xs font-medium text-success">Worked {dayTotalHours}</p>
+                      <p className="text-xs font-medium text-success">Last session {dayTotalHours}</p>
+                    )}
+                    {dayState === 'complete' && Number(todayRecord?.overtime_hours ?? 0) > 0 && (
+                      <p className="text-xs font-medium text-warning">
+                        OT {formatDuration(todayRecord?.overtime_hours ?? null)}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1255,10 +1260,23 @@ export default function DashboardPage() {
                       )}
                     </button>
                   ) : (
-                    <div className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-successSoft text-sm font-medium text-success">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Day complete
-                    </div>
+                    <button
+                      onClick={() => checkInMutation.mutate({ method: 'web' })}
+                      disabled={checkInMutation.isPending}
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-orange text-sm font-medium text-white transition hover:bg-orangeDark focus:outline-none focus:ring-2 focus:ring-orange/40 focus:ring-offset-2 focus:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {checkInMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Checking in…
+                        </>
+                      ) : (
+                        <>
+                          <LogIn className="h-4 w-4" />
+                          Check In Again
+                        </>
+                      )}
+                    </button>
                   )}
                 </div>
 

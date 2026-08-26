@@ -36,6 +36,9 @@ test_output.txt
 userlist.txt
 *.tmp
 
+# Bulk test seed data (local only, never push to Supabase)
+backend/app/seeds/bulk/sample/
+
 # Internal AI-dev context & run logs (not for client repo)
 _ai_context/
 full_run.txt

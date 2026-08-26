@@ -9,7 +9,7 @@ ATTENDANCE_SETTINGS = {
     "working_hours": {
         "start": "09:00",
         "end": "18:00",
-        "break_minutes": 60,
+        "break_minutes": 0,
         "min_hours": 8,
     },
     "late_policy": {

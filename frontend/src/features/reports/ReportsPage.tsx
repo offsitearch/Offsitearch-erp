@@ -49,7 +49,7 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-xl font-bold text-ink sm:text-2xl">{t('reports.title')}</h1>
         <p className="mt-1 text-sm text-muted">
-          {t('reports.attendanceProjectsFinanceHr')} with CSV / Excel export.
+          {t('reports.attendanceProjectsFinanceHr')} — export to Google Sheets.
         </p>
       </div>
 
@@ -83,45 +83,27 @@ function ReportHeader({
 }: {
   title: string;
   subtitle: string;
-  onExport: (format: 'csv' | 'xlsx') => void;
+  onExport: () => void;
 }) {
-  const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null);
+  const [exporting, setExporting] = useState(false);
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 shadow-card">
       <div>
         <h2 className="text-base font-bold text-ink">{title}</h2>
         <p className="text-sm text-muted">{subtitle}</p>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => {
-            setExporting('csv');
-            onExport('csv');
-            setExporting(null);
-          }}
-          disabled={exporting !== null}
-          className={secondaryBtnClass}
-        >
-          {exporting === 'csv' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          CSV
-        </button>
-        <button
-          onClick={() => {
-            setExporting('xlsx');
-            onExport('xlsx');
-            setExporting(null);
-          }}
-          disabled={exporting !== null}
-          className={secondaryBtnClass}
-        >
-          {exporting === 'xlsx' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileSpreadsheet className="h-4 w-4" />
-          )}
-          Excel
-        </button>
-      </div>
+      <button
+        onClick={() => {
+          setExporting(true);
+          onExport();
+          setExporting(false);
+        }}
+        disabled={exporting}
+        className={secondaryBtnClass}
+      >
+        {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+        Open in Sheets
+      </button>
     </div>
   );
 }
@@ -240,9 +222,9 @@ function AttendanceReport() {
     queryFn: () => getAttendanceReport(from, to, 'json'),
   });
 
-  function handleExport(format: 'csv' | 'xlsx') {
-    downloadAttendanceFile(from, to, format).then(
-      () => toast(`Attendance report downloaded as ${format.toUpperCase()}`, 'success'),
+  function handleExport() {
+    downloadAttendanceFile(from, to, 'xlsx').then(
+      () => toast('Attendance report downloaded — open in Google Sheets', 'success'),
       () => toast('Failed to export report', 'error'),
     );
   }
@@ -311,13 +293,13 @@ function ProjectsReport() {
       getProjectsReport({ status: status || undefined, project_type: projectType || undefined }),
   });
 
-  function handleExport(format: 'csv' | 'xlsx') {
+  function handleExport() {
     downloadReportFile(
       '/reports/projects',
-      { status: status || undefined, project_type: projectType || undefined, format },
-      `projects_report.${format}`,
+      { status: status || undefined, project_type: projectType || undefined, format: 'xlsx' },
+      'projects_report.xlsx',
     ).then(
-      () => toast(`Projects report downloaded as ${format.toUpperCase()}`, 'success'),
+      () => toast('Projects report downloaded — open in Google Sheets', 'success'),
       () => toast('Failed to export report', 'error'),
     );
   }
@@ -427,12 +409,12 @@ function TimesheetsReport() {
     queryFn: () => getTimesheetEmployeeOptions(filters.department_id),
   });
 
-  function handleExport(format: 'pdf' | 'csv' | 'xlsx') {
+  function handleExport(format: 'pdf' | 'xlsx') {
     setExporting(format);
     downloadReportFile('/reports/timesheets', { ...filters, format }, `timesheets_report.${format}`).then(
       () => {
         setExporting(null);
-        toast(`Timesheets report downloaded as ${format.toUpperCase()}`, 'success');
+        toast(format === 'xlsx' ? 'Timesheets report downloaded — open in Google Sheets' : `Timesheets report downloaded as ${format.toUpperCase()}`, 'success');
       },
       () => {
         setExporting(null);
@@ -452,7 +434,7 @@ function TimesheetsReport() {
           <p className="text-sm text-muted">Each employee's hours in one section — daily, weekly or monthly.</p>
         </div>
         <div className="flex items-center gap-2">
-          {(['pdf', 'xlsx', 'csv'] as const).map((format) => (
+          {(['xlsx', 'pdf'] as const).map((format) => (
             <button
               key={format}
               onClick={() => handleExport(format)}
@@ -466,7 +448,7 @@ function TimesheetsReport() {
               ) : (
                 <FileSpreadsheet className="h-4 w-4" />
               )}
-              {format.toUpperCase()}
+              {format === 'xlsx' ? 'Open in Sheets' : format.toUpperCase()}
             </button>
           ))}
         </div>
@@ -565,7 +547,7 @@ function TimesheetsReport() {
                 <div>
                   <h3 className="text-sm font-bold text-ink">{emp.employee_name}</h3>
                   <p className="text-xs text-muted">
-                    {[emp.employee_id, emp.department].filter(Boolean).join(' · ') || '—'}
+                    {[emp.employee_id, emp.department, emp.approved_by_name ? `Approved by ${emp.approved_by_name}` : null].filter(Boolean).join(' · ') || '—'}
                   </p>
                 </div>
                 <p className="text-sm font-bold tabular-nums text-ink">{emp.total_hours}h total</p>
@@ -635,9 +617,9 @@ function FinanceReport() {
     queryFn: () => getFinanceReport({ period }),
   });
 
-  function handleExport(format: 'csv' | 'xlsx') {
-    downloadReportFile('/reports/finance', { period, format }, `finance_report.${format}`).then(
-      () => toast(`Finance report downloaded as ${format.toUpperCase()}`, 'success'),
+  function handleExport() {
+    downloadReportFile('/reports/finance', { period, format: 'xlsx' }, 'finance_report.xlsx').then(
+      () => toast('Finance report downloaded — open in Google Sheets', 'success'),
       () => toast('Failed to export report', 'error'),
     );
   }
@@ -723,9 +705,9 @@ function HrReport() {
     queryFn: () => getHrReport({ month, year }),
   });
 
-  function handleExport(format: 'csv' | 'xlsx') {
-    downloadReportFile('/reports/hr', { month, year, format }, `hr_report.${format}`).then(
-      () => toast(`HR report downloaded as ${format.toUpperCase()}`, 'success'),
+  function handleExport() {
+    downloadReportFile('/reports/hr', { month, year, format: 'xlsx' }, 'hr_report.xlsx').then(
+      () => toast('HR report downloaded — open in Google Sheets', 'success'),
       () => toast('Failed to export report', 'error'),
     );
   }

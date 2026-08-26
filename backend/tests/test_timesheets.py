@@ -606,7 +606,7 @@ async def test_entry_validation_rules(ts_employee: User) -> None:
         )
         assert right_task.status_code == 200
 
-        # More than 24h on a single day.
+        # More than 24h on a single day — no longer blocked.
         overloaded = await _save_week(
             client,
             emp_headers,
@@ -615,7 +615,7 @@ async def test_entry_validation_rules(ts_employee: User) -> None:
                 {"project_id": project_id, "date": today_iso, "hours": 6},
             ],
         )
-        assert overloaded.status_code == 400
+        assert overloaded.status_code == 200
 
 
 async def test_permissions_and_privacy(ts_lead: User, ts_employee: User) -> None:

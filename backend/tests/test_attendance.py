@@ -75,7 +75,7 @@ async def lead():
 
 async def test_check_in_check_out_service_flow(employee: User) -> None:
     check_in_time = datetime(2026, 8, 10, 4, 30, tzinfo=timezone.utc)  # 10:00 IST → late 60
-    check_out_time = datetime(2026, 8, 10, 12, 30, tzinfo=timezone.utc)  # 8h minus break → 7.00
+    check_out_time = datetime(2026, 8, 10, 12, 30, tzinfo=timezone.utc)  # 8h raw
 
     async with AsyncSessionLocal() as db:
         record = await attendance_service.check_in(
@@ -95,7 +95,7 @@ async def test_check_in_check_out_service_flow(employee: User) -> None:
             db, employee, CheckOutRequest(), now=check_out_time
         )
         assert record.check_out_time == check_out_time
-        assert float(record.total_hours) == 7.0
+        assert float(record.total_hours) == 8.0
 
 
 async def test_check_out_without_check_in_rejected(employee: User) -> None:
@@ -130,7 +130,7 @@ async def test_total_hours_subtracts_break() -> None:
     work = dict(ATTENDANCE_SETTINGS["working_hours"])
     check_in = datetime(2026, 8, 10, 3, 30, tzinfo=timezone.utc)
     check_out = datetime(2026, 8, 10, 12, 30, tzinfo=timezone.utc)
-    assert float(attendance_service.compute_total_hours(check_in, check_out, work)) == 8.0
+    assert float(attendance_service.compute_total_hours(check_in, check_out, work)) == 9.0
 
 
 async def test_http_check_in_flow(employee: User) -> None:
@@ -266,7 +266,7 @@ async def test_report_csv() -> None:
         )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
-    assert "user_name" in response.text
+    assert "Name" in response.text
 
 
 async def test_check_out_twice_rejected(employee: User) -> None:
@@ -332,7 +332,7 @@ async def test_bulk_mark_updates_existing_with_times(employee: User) -> None:
         updated = await attendance_repository.get_by_user_date(db, employee.id, bulk_date)
     assert updated is not None
     assert updated.status == AttendanceStatus.PRESENT
-    assert float(updated.total_hours) == 8.0
+    assert float(updated.total_hours) == 9.0
     assert updated.notes == "fixed"
 
 
