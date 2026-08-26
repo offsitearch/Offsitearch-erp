@@ -1,0 +1,286 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+
+  /* Brand tokens (light) — RGB channels, consumed by tailwind.config.js.
+     Warm neutral system: #FAFAF8 canvas · #F3F1EC cards · ink text · gold accent. */
+  --paper: 250 250 248;
+  --surface: 243 241 236;
+  --surface-warm: 236 233 225;
+  --ink: 26 26 24;
+  --graphite: 107 107 101;
+  --muted: 156 156 150;
+  --border: 226 221 213;
+
+  --navy: 26 26 24;
+  --navy-dark: 15 15 14;
+  --orange: 201 150 74;
+  --orange-dark: 173 125 53;
+
+  --success: 47 143 107;
+  --success-soft: 234 245 240;
+  --warning: 197 138 42;
+  --warning-soft: 251 243 223;
+  --danger: 185 86 72;
+  --danger-soft: 249 236 233;
+  --info: 71 124 155;
+  --info-soft: 234 242 246;
+
+  --primary-light: 138 133 123;
+  --secondary-light: 233 217 188;
+}
+
+.dark {
+  color-scheme: light;
+
+  /* The brand system defines a light-only palette; dark resolves to the same
+     warm values so OS-level dark preference stays on-brand and legible. */
+  --paper: 250 250 248;
+  --surface: 243 241 236;
+  --surface-warm: 236 233 225;
+  --ink: 26 26 24;
+  --graphite: 107 107 101;
+  --muted: 156 156 150;
+  --border: 226 221 213;
+
+  --navy: 26 26 24;
+  --navy-dark: 15 15 14;
+  --orange: 201 150 74;
+  --orange-dark: 173 125 53;
+
+  --success: 47 143 107;
+  --success-soft: 234 245 240;
+  --warning: 197 138 42;
+  --warning-soft: 251 243 223;
+  --danger: 185 86 72;
+  --danger-soft: 249 236 233;
+  --info: 71 124 155;
+  --info-soft: 234 242 246;
+
+  --primary-light: 138 133 123;
+  --secondary-light: 233 217 188;
+}
+
+body {
+  @apply bg-paper text-ink antialiased;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Brand typography — headings/display use Outfit; body stays Inter.
+   Unlayered so it also applies wherever Tailwind's text-display size utility
+   is used for stat numbers. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.text-display {
+  font-family: 'Outfit', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Consistent keyboard focus */
+:focus-visible {
+  outline: 2px solid rgb(var(--orange) / 0.65);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(var(--orange) / 0.22);
+}
+
+/* ── Form controls (global polish) ────────────────────────────── */
+
+/* Custom chevron for native <select> triggers — pairs with the
+   .select-chevron class exported via lib/styles.ts selectClass.
+   Unlayered so it wins over Tailwind's px-3 utility. */
+.select-chevron {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239c9c96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  padding-right: 2.25rem;
+}
+
+/* Brand-colored checkboxes and radios app-wide */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: rgb(var(--orange));
+}
+
+/* Slightly taller click target for checkboxes */
+input[type='checkbox'] {
+  cursor: pointer;
+}
+
+/* Slim, subtle scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--ink) / 0.16);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--ink) / 0.28);
+  background-clip: padding-box;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink) / 0.16) transparent;
+}
+
+@layer utilities {
+  /* Hide scrollbars entirely while keeping scrollability */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  /* Subtle architectural grid — brand texture, low contrast */
+  .arch-grid-light {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .arch-grid-paper {
+    background-image: linear-gradient(rgba(26, 26, 24, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26, 26, 24, 0.02) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Gentle rise-in used for staggered section entrance */
+  .animate-rise {
+    animation: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Toast animations */
+  .toast-enter {
+    animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .toast-exit {
+    animation: toastOut 0.2s cubic-bezier(0.55, 0, 1, 0.45) both;
+  }
+
+  .toast-progress {
+    animation: toastCountdown 5s linear forwards;
+  }
+
+  .animate-confirmIn {
+    animation: confirmIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40%) scale(0.95);
+  }
+}
+
+@keyframes toastCountdown {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes confirmIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Desktop-only gate ────────────────────────────────── */
+.desktop-only {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-only {
+    display: block;
+  }
+}
+
+/* ── Mobile block screen ─────────────────────────────── */
+.mobile-block {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: rgb(var(--paper));
+  padding: 2rem;
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .mobile-block {
+    display: none;
+  }
+}

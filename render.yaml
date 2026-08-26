@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: studio-erp-api
+    runtime: python
+    plan: free
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+    # `sh` avoids any dependency on the file's executable bit on Linux.
+    startCommand: |
+      cd backend
+      sh entrypoint.sh
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      # Supabase/Postgres DSN — MUST keep the `postgresql+asyncpg://` scheme,
+      # e.g. postgresql+asyncpg://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      # REQUIRED: Comma-separated list of your frontend domain(s).
+      # The backend will NOT start if this contains localhost.
+      # Example: https://<your-app>.vercel.app,https://<custom-domain>
+      - key: CORS_ORIGINS
+        sync: false
+      # Public base URL of the SPA — used for links inside emails.
+      - key: FRONTEND_URL
+        sync: false
+      - key: FIRST_SUPERUSER_EMAIL
+        value: admin@studioerp.dev
+      - key: FIRST_SUPERUSER_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      # Google Drive backup — set the real values in the Render dashboard.
+      # GOOGLE_REDIRECT_URI must be https://<backend-host>/api/v1/backup/google/callback
+      # and must exactly match a redirect URI on the Google Cloud OAuth client.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: BACKUP_UI_REDIRECT
+        sync: false
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: PYTHON_VERSION
+        value: "3.12"
+    healthCheckPath: /api/v1/system/ready
+    autoDeploy: true

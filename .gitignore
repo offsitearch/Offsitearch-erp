@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env & secrets
+.env
+.env.local
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime
+uploads/
+*.log
+backup_*.sql
+
+# Temp/debug artifacts
+test_output.txt
+userlist.txt
+*.tmp
+
+# Internal AI-dev context & run logs (not for client repo)
+_ai_context/
+full_run.txt
+tmp_timing_out.txt
+wt_run*.txt
+ts_run*.txt
+backend/scripts/tmp_dbg_ts.py
+backend/scripts/tmp_timing.py
+backend/scripts/tmp_connect_timing.py

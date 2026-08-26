@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="color: #263B4D;">Invoice {{ invoice_number }}</h2>
+<p>Dear {{ client_name }},</p>
+<p>Please find your invoice details below:</p>
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+<tr><td style="padding: 8px; color: #666;">Invoice Number</td><td style="padding: 8px;">{{ invoice_number }}</td></tr>
+<tr><td style="padding: 8px; color: #666;">Amount</td><td style="padding: 8px;"><strong>{{ total }}</strong></td></tr>
+<tr><td style="padding: 8px; color: #666;">Due Date</td><td style="padding: 8px;">{{ due_date }}</td></tr>
+</table>
+<p>Please make the payment before the due date. For any queries, contact us at accounts@studioerp.dev.</p>
+{% endblock %}

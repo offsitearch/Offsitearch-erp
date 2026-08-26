@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="color: #263B4D;">Welcome to OFFSITE Studio ERP</h2>
+<p>Hello {{ user_name }},</p>
+<p>Your account has been created. Here are your login credentials:</p>
+<div style="background: #f8f9fa; padding: 16px; border-radius: 6px; margin: 16px 0;">
+<p><strong>Email:</strong> (use your registered email)</p>
+<p><strong>Password:</strong> <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px;">{{ password }}</code></p>
+</div>
+<p>Please log in and change your password immediately.</p>
+<p><a href="{{ login_url }}" style="display: inline-block; background: #263B4D; color: #fff; padding: 10px 24px; border-radius: 6px; text-decoration: none;">Log In</a></p>
+{% endblock %}

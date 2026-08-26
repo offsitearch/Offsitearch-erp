@@ -1,0 +1,48 @@
+[importlinter]
+root_package = app
+# app.utils.shared references User only under TYPE_CHECKING for hints;
+# type-only imports create no runtime coupling or circularity, so they
+# are excluded from contract checks. Runtime violations still fail.
+exclude_type_checking_imports = true
+
+[importlinter:contract:core-independent]
+name = Core and utils never depend on modules or the API layer
+type = forbidden
+source_modules =
+    app.core
+    app.utils
+forbidden_modules =
+    app.modules
+    app.api
+
+[importlinter:contract:model-boundaries]
+name = Module models never import each other (cross-module reads go through services or the app.models registry)
+type = independence
+modules =
+    app.modules.attendance.models
+    app.modules.audit.models
+    app.modules.backup.models
+    app.modules.clients.models
+    app.modules.employees.models
+    app.modules.finance.models
+    app.modules.holidays.models
+    app.modules.identity.models
+    app.modules.leave.models
+    app.modules.meetings.models
+    app.modules.notifications.models
+    app.modules.notices.models
+    app.modules.orgstructure.models
+    app.modules.payroll.models
+    app.modules.projects.models
+    app.modules.settings.models
+    app.modules.site_visits.models
+    app.modules.tasks.models
+    app.modules.timesheets.models
+
+[importlinter:contract:no-main-from-modules]
+name = Modules never import app.main
+type = forbidden
+source_modules =
+    app.modules
+forbidden_modules =
+    app.main

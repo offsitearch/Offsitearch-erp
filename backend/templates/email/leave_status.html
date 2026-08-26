@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="color: #263B4D;">Leave {{ status|capitalize }}</h2>
+<p>Hello {{ user_name }},</p>
+<p>Your <strong>{{ leave_type }}</strong> leave request has been <strong>{{ status }}</strong>.</p>
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+<tr><td style="padding: 8px; color: #666;">Period</td><td style="padding: 8px;">{{ from_date }} to {{ to_date }}</td></tr>
+<tr><td style="padding: 8px; color: #666;">Status</td><td style="padding: 8px;"><strong>{{ status|upper }}</strong></td></tr>
+{% if reason %}<tr><td style="padding: 8px; color: #666;">Reason</td><td style="padding: 8px;">{{ reason }}</td></tr>{% endif %}
+</table>
+<p><a href="https://studioerp.dev/leaves/mine" style="display: inline-block; background: #263B4D; color: #fff; padding: 10px 24px; border-radius: 6px; text-decoration: none;">View Leaves</a></p>
+{% endblock %}
