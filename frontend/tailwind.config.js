@@ -77,6 +77,15 @@ export default {
         card: '0 1px 3px rgba(26, 26, 24, 0.06)',
         overlay: '0 8px 24px rgba(26, 26, 24, 0.10)',
       },
+      animation: {
+        'loader-bar': 'loaderBar 0.6s ease-out both',
+      },
+      keyframes: {
+        loaderBar: {
+          '0%': { transform: 'scaleY(0)', transformOrigin: 'bottom' },
+          '100%': { transform: 'scaleY(1)', transformOrigin: 'bottom' },
+        },
+      },
     },
   },
   plugins: [],
