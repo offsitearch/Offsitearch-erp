@@ -73,7 +73,7 @@ async def check_in(
     now = now or now_local()
     local_now = to_local(now)
     existing = await attendance_repository.get_by_user_date(db, user.id, local_now.date())
-    if existing is not None and existing.check_in_time is not None:
+    if existing is not None and existing.check_in_time is not None and existing.check_out_time is None:
         raise AttendanceError("Already checked in today")
 
     cfg = await load_attendance_settings(db)
@@ -85,7 +85,6 @@ async def check_in(
         existing.check_out_time = None
         existing.status = status
         existing.late_minutes = late_minutes
-        existing.total_hours = 0
         existing.check_in_method = payload.method
         existing.check_in_location = payload.location
         if payload.notes:
@@ -122,7 +121,9 @@ async def check_out(
 
     cfg = await load_attendance_settings(db)
     record.check_out_time = now
-    record.total_hours = compute_total_hours(record.check_in_time, now, cfg["working_hours"])
+    session_hours = compute_total_hours(record.check_in_time, now, cfg["working_hours"])
+    previous = Decimal(str(record.total_hours or 0))
+    record.total_hours = previous + session_hours
     if payload.notes:
         record.notes = payload.notes
     await db.commit()

@@ -125,44 +125,43 @@ export default function MyAttendancePage() {
     onError: () => setNotice({ kind: 'error', text: "Couldn't record your check-out. Please try again." }),
   });
 
-  const checkedIn = Boolean(todayRecord?.check_in_time);
+  const hasActiveSession = Boolean(todayRecord?.check_in_time && !todayRecord?.check_out_time);
+  const checkedIn = hasActiveSession;
   const checkedOut = Boolean(todayRecord?.check_out_time);
   const isLate = todayRecord?.status === 'late';
 
-  const pill = !checkedIn
+  const pill = !todayRecord
     ? { label: t('dashboard.notCheckedIn'), bg: 'bg-white/10', text: 'text-white/60', dot: 'bg-white/40' }
-    : isLate
-      ? {
-          label: `Late · ${todayRecord?.late_minutes ?? 0}m`,
-          bg: 'bg-warning/15',
-          text: 'text-warning',
-          dot: 'bg-warning',
-        }
-      : checkedOut
+    : hasActiveSession
+      ? isLate
         ? {
-            label: t('dashboard.dayComplete'),
-            bg: 'bg-success/15',
-            text: 'text-success',
-            dot: 'bg-success',
+            label: `Late · ${todayRecord.late_minutes ?? 0}m`,
+            bg: 'bg-warning/15',
+            text: 'text-warning',
+            dot: 'bg-warning',
           }
         : {
             label: t('attendance.checkedInStatus'),
             bg: 'bg-success/15',
             text: 'text-success',
             dot: 'bg-success',
-          };
+          }
+      : {
+          label: t('dashboard.dayComplete'),
+          bg: 'bg-success/15',
+          text: 'text-success',
+          dot: 'bg-success',
+        };
 
   const workedMinutes = useMemo(() => {
     if (!todayRecord) return 0;
-    if (checkedOut) {
-      const h = todayRecord.total_hours;
-      if (!h) return 0;
-      const parsed = parseFloat(String(h));
-      return Number.isNaN(parsed) ? 0 : Math.round(parsed * 60);
+    const accumulated = parseFloat(String(todayRecord.total_hours || 0));
+    const accumulatedMin = Number.isNaN(accumulated) ? 0 : Math.round(accumulated * 60);
+    if (hasActiveSession) {
+      return accumulatedMin + liveMinutes(todayRecord.check_in_time, now);
     }
-    if (checkedIn) return liveMinutes(todayRecord.check_in_time, now);
-    return 0;
-  }, [todayRecord, checkedIn, checkedOut, now]);
+    return accumulatedMin;
+  }, [todayRecord, hasActiveSession, now]);
 
   const worked = workedMinutes > 0 ? formatMinutesDuration(workedMinutes) : '—';
 
@@ -300,7 +299,7 @@ export default function MyAttendancePage() {
                   </div>
                 )}
 
-                {!checkedIn ? (
+                {!hasActiveSession ? (
                   <button
                     onClick={() => checkInMutation.mutate()}
                     disabled={checkInMutation.isPending}
@@ -314,11 +313,11 @@ export default function MyAttendancePage() {
                     ) : (
                       <>
                         <LogIn className="h-4 w-4" />
-                        Check In
+                        {checkedOut ? 'Check In Again' : 'Check In'}
                       </>
                     )}
                   </button>
-                ) : !checkedOut ? (
+                ) : (
                   confirmCheckout ? (
                     <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
                       <p className="text-xs font-medium text-white/60">{t('attendance.confirmCheckoutQuestion')}</p>
@@ -359,11 +358,6 @@ export default function MyAttendancePage() {
                       Check Out
                     </button>
                   )
-                ) : (
-                  <div className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-success/30 bg-success/15 px-4 text-sm font-semibold text-success">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Day complete
-                  </div>
                 )}
               </div>
 
