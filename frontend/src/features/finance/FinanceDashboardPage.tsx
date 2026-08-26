@@ -2,7 +2,7 @@
 import { Banknote, FileText, IndianRupee, Receipt, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { getFinanceOverview } from '../../api/finance';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { formatINR } from '../../lib/constants';
 import type { FinanceOverview } from '../../lib/types';
 import { useAuthStore } from '../../store/authStore';
@@ -78,17 +78,7 @@ export default function FinanceDashboardPage() {
   const maxBar = Math.max(1, ...chartData.map((d) => d.invoiced));
 
   if (overviews.isPending) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48 rounded" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 w-full rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-64 w-full rounded-xl" />
-      </div>
-    );
+    return <LogoLoader />;
   }
 
   const current = overviews.data?.[period];

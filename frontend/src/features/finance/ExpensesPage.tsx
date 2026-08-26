@@ -10,7 +10,7 @@ import {
   uploadExpenseReceipt,
 } from '../../api/finance';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import DatePicker from '../../components/ui/DatePicker';
 import CurrencyInput from '../../components/ui/CurrencyInput';
 import { useToast } from '../../components/Toast';
@@ -100,11 +100,7 @@ export default function ExpensesPage() {
       </div>
 
       {expenses.isPending ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : (expenses.data ?? []).length === 0 ? (
         <EmptyState
           title={t('finance.noExpensesFound')}

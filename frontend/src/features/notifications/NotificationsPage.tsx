@@ -18,7 +18,7 @@ import {
   markNotificationRead,
 } from '../../api/notifications';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import type { Notification } from '../../lib/types';
 import { useTranslation } from 'react-i18next';
 
@@ -131,11 +131,7 @@ export default function NotificationsPage() {
       </div>
 
       {notifications.isPending ? (
-        <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
+        <LogoLoader />
       ) : list.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <EmptyState

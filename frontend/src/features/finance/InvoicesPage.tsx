@@ -3,7 +3,7 @@ import { FilePlus2, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { getInvoices } from '../../api/finance';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { formatINR, invoiceStatusMeta } from '../../lib/constants';
 import { useAuthStore } from '../../store/authStore';
 import { FinanceTabs } from './components/FinanceTabs';
@@ -75,11 +75,7 @@ export default function InvoicesPage() {
       </div>
 
       {invoices.isPending ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : (invoices.data ?? []).length === 0 ? (
         <EmptyState
           title={t('finance.noInvoicesYet')}

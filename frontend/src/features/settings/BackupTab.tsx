@@ -20,7 +20,7 @@ import {
   runBackupNow,
   updateBackupSchedule,
 } from '../../api/backup';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useToast } from '../../components/Toast';
 import { formatDateTime } from '../../lib/date';
 import { primaryBtnClass, secondaryBtnClass, smallInputClass } from '../../lib/styles';
@@ -113,13 +113,7 @@ export function BackupTab() {
   });
 
   if (status.isPending) {
-    return (
-      <div className="space-y-4 rounded-xl border border-border bg-surface p-5 shadow-card">
-        <Skeleton className="h-6 w-1/3 rounded" />
-        <Skeleton className="h-24 w-full rounded" />
-        <Skeleton className="h-40 w-full rounded" />
-      </div>
-    );
+    return <LogoLoader />;
   }
 
   const s = status.data;

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { getProjects } from '../../api/projects';
 import { createMyExpense, downloadExpenseReceipt, getMyExpenses } from '../../api/finance';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import DatePicker from '../../components/ui/DatePicker';
 import CurrencyInput from '../../components/ui/CurrencyInput';
 import { useToast } from '../../components/Toast';
@@ -101,11 +101,7 @@ export default function MyExpensesPage() {
       </div>
 
       {expenses.isPending ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : (expenses.data ?? []).length === 0 ? (
         <EmptyState
           title="No expenses found"

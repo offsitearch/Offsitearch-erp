@@ -13,7 +13,7 @@ import {
 } from '../../api/reports';
 import { getDepartments } from '../../api/employees';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import DatePicker from '../../components/ui/DatePicker';
 import { useToast } from '../../components/Toast';
 import {
@@ -154,7 +154,6 @@ function ReportPanel({
   );
 }
 
-const TABLE_SKELETON = [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />);
 
 function ReportTable({
   columns,
@@ -258,7 +257,7 @@ function AttendanceReport() {
         </div>
       </div>
       {report.isPending ? (
-        <div className="space-y-2">{TABLE_SKELETON}</div>
+        <LogoLoader />
       ) : (report.data ?? []).length === 0 ? (
         <EmptyState icon={FileSpreadsheet} title="No attendance records" text="Nothing logged in the selected range." />
       ) : (
@@ -346,7 +345,7 @@ function ProjectsReport() {
         </div>
       )}
       {report.isPending ? (
-        <div className="space-y-2">{TABLE_SKELETON}</div>
+        <LogoLoader />
       ) : (report.data?.rows ?? []).length === 0 ? (
         <EmptyState icon={Building2} title="No projects match the filters" />
       ) : (
@@ -533,7 +532,7 @@ function TimesheetsReport() {
         </div>
       )}
       {report.isPending ? (
-        <div className="space-y-2">{TABLE_SKELETON}</div>
+        <LogoLoader />
       ) : employeesData.length === 0 ? (
         <EmptyState icon={Clock} title="No timesheet hours match these filters" />
       ) : (
@@ -657,7 +656,7 @@ function FinanceReport() {
         </div>
       )}
       {report.isPending ? (
-        <div className="space-y-2">{TABLE_SKELETON}</div>
+        <LogoLoader />
       ) : (report.data?.rows ?? []).length === 0 ? (
         <EmptyState icon={FileSpreadsheet} title="No invoices in this period" />
       ) : (
@@ -749,7 +748,7 @@ function HrReport() {
         </div>
       )}
       {report.isPending ? (
-        <div className="space-y-2">{TABLE_SKELETON}</div>
+        <LogoLoader />
       ) : (report.data?.rows ?? []).length === 0 ? (
         <EmptyState icon={Users} title="No HR data for this month" />
       ) : (

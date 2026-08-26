@@ -19,7 +19,7 @@ import { useAuthStore } from '../../store/authStore';
 import { encodeId } from '../../lib/obfuscate';
 import { EmployeeTabs } from './components/EmployeeTabs';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useTranslation } from 'react-i18next';
 import { primaryBtnClass, inputClass, pageBtnClass, secondaryBtnClass } from '../../lib/styles';
 
@@ -208,18 +208,7 @@ export default function EmployeeDirectoryPage() {
       </div>
 
       {employees.isPending ? (
-        <div className="space-y-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-lg border border-border bg-surface p-5 shadow-card">
-              <Skeleton className="mb-4 h-5 w-40" />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 3 }).map((_, j) => (
-                  <Skeleton key={j} className="h-24 w-full rounded-lg" />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <LogoLoader />
       ) : employees.isError ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
           <AlertCircle className="h-6 w-6 text-danger" />

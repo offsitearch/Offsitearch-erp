@@ -17,7 +17,7 @@ import { checkIn, checkOut, getHolidays, getMyAttendance } from '../../api/atten
 import { ATTENDANCE_METHOD_LABELS, ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_OPTIONS } from '../../lib/constants';
 import { formatDuration, formatMinutesDuration, formatTime, monthLabel, toISODate } from '../../lib/date';
 import type { AttendanceRecord, AttendanceStatus } from '../../lib/types';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { MonthCalendar } from './components/MonthCalendar';
 import { useTranslation } from 'react-i18next';
 
@@ -403,13 +403,7 @@ export default function MyAttendancePage() {
             </div>
             <div className="p-5">
               {summary.isPending ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-9 w-full" />
-                  <Skeleton className="h-9 w-full" />
-                  <Skeleton className="h-9 w-full" />
-                  <Skeleton className="h-9 w-full" />
-                </div>
+                <LogoLoader />
               ) : summary.isError ? (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-6 text-center">
                   <p className="text-sm text-muted">Couldn't load month totals.</p>
@@ -515,11 +509,7 @@ export default function MyAttendancePage() {
 
             <div className="p-3">
               {summary.isPending ? (
-                <div className="grid grid-cols-7 gap-1">
-                  {Array.from({ length: 14 }).map((_, i) => (
-                    <Skeleton key={i} className="h-20 w-full" />
-                  ))}
-                </div>
+                <LogoLoader />
               ) : summary.isError ? (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-10 text-center">
                   <AlertCircle className="h-6 w-6 text-danger" />

@@ -15,6 +15,7 @@ import { cancelLeave, getLeaveBalances, getMyLeaves } from '../../api/leave';
 import { leaveTypeLabel } from '../../lib/constants';
 import { formatDate, formatDateRange, formatDayCount, toISODate } from '../../lib/date';
 import type { LeaveBalance, LeaveRecord, LeaveType } from '../../lib/types';
+import { LogoLoader } from '../../components/LogoLoader';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { LeaveTabs } from './components/LeaveTabs';
 import { LeaveStatusBadge } from './components/LeaveStatusBadge';
@@ -159,11 +160,7 @@ export default function MyLeavesPage() {
         </div>
 
         {balances.isPending ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-36 w-full rounded-xl" />
-            ))}
-          </div>
+          <LogoLoader />
         ) : balances.isError ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-10 text-center">
             <AlertCircle className="h-6 w-6 text-danger" />

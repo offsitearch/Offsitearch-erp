@@ -23,6 +23,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useDecodedIdRequired as useDecodedId } from '../../lib/useDecodedId';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { LogoLoader } from '../../components/LogoLoader';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/Toast';
 import {
@@ -153,28 +154,7 @@ export default function EmployeeProfilePage() {
   const p = profile.data;
 
   if (profile.isPending) {
-    return (
-      <div className="space-y-6">
-        <header className="flex items-center gap-4">
-          <Skeleton className="h-14 w-14 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-56" />
-            <Skeleton className="h-4 w-72" />
-          </div>
-        </header>
-        <Skeleton className="h-10 w-full" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-72 w-full" />
-          </div>
-          <div className="space-y-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-32 w-full" />
-          </div>
-        </div>
-      </div>
-    );
+    return <LogoLoader />;
   }
 
   if (!p) {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createNotice, deleteNotice, getNotices, updateNotice } from '../../api/notices';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import DatePicker from '../../components/ui/DatePicker';
 import { useToast } from '../../components/Toast';
 import { noticeImportanceMeta, canAccess } from '../../lib/constants';
@@ -67,11 +67,7 @@ export default function NoticeBoardPage() {
       </div>
 
       {notices.isPending ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : sorted.length === 0 ? (
         <EmptyState
           title={t('settings.noNoticesYet')}

@@ -3,7 +3,7 @@ import { Download, Loader2, Send, Wallet, X } from 'lucide-react';
 import { useState } from 'react';
 import { downloadInvoicePdf, getInvoice, recordInvoicePayment, sendInvoice } from '../../../api/finance';
 import { Modal } from '../../../components/Modal';
-import { Skeleton } from '../../../components/ui/Skeleton';
+import { LogoLoader } from '../../../components/LogoLoader';
 import { formatINR, invoiceStatusMeta, paymentMethodLabel } from '../../../lib/constants';
 import type { PaymentMethod } from '../../../lib/types';
 import RecordPaymentModal from './RecordPaymentModal';
@@ -70,7 +70,7 @@ export default function InvoiceDetailModal({ id, onClose }: { id: number; onClos
   if (invoice.isPending) {
     return (
       <Modal onClose={onClose} maxWidth="max-w-2xl">
-        <Skeleton className="h-80 rounded-xl" />
+        <LogoLoader />
       </Modal>
     );
   }

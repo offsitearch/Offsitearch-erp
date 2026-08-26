@@ -12,7 +12,7 @@ import {
 import { EmployeeTabs } from './components/EmployeeTabs';
 import { canAccess } from '../../lib/constants';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useTranslation } from 'react-i18next';
 import { primaryBtnClass, secondaryBtnClass, dangerBtnClass, modalFieldClass as fieldClass, labelClass } from '../../lib/styles';
 
@@ -115,11 +115,7 @@ export default function DepartmentsPage() {
       )}
 
       {departments.isPending ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : departments.isError ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
           <AlertCircle className="h-6 w-6 text-danger" />

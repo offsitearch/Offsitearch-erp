@@ -17,7 +17,7 @@ import { getClients } from '../../api/clients';
 import { getEmployees } from '../../api/employees';
 import { createProject, getPhaseTemplates, getProjects } from '../../api/projects';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import {
   canAccess,
   formatINR,
@@ -279,11 +279,7 @@ export default function ProjectsPage() {
       </div>
 
       {projects.isPending ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-56 w-full" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : projects.isError ? (
         <EmptyState
           icon={AlertCircle}

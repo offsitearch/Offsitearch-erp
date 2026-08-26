@@ -14,6 +14,7 @@ import {
 } from '../../api/siteVisits';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LogoLoader } from '../../components/LogoLoader';
 import { Skeleton } from '../../components/ui/Skeleton';
 import DatePicker from '../../components/ui/DatePicker';
 import TimeInput from '../../components/ui/TimeInput';
@@ -85,11 +86,7 @@ export default function SiteVisitsPage() {
       </div>
 
       {visits.isPending ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-52 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : sorted.length === 0 ? (
         <EmptyState
           title={t('siteVisits.noSiteVisits')}

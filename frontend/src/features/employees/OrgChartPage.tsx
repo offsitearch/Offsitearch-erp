@@ -10,7 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 import { encodeId } from '../../lib/obfuscate';
 import { EmployeeTabs } from './components/EmployeeTabs';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useTranslation } from 'react-i18next';
 import { smallBtnClass, modalFieldClass, modalLabelClass, primaryBtnClass, secondaryBtnClass } from '../../lib/styles';
 
@@ -313,18 +313,7 @@ export default function OrgChartPage() {
 
       <section className="overflow-x-auto rounded-lg border border-border bg-paper/40 shadow-card">
         {chart.isPending ? (
-          <div className="flex flex-col items-center gap-6 py-16">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex flex-col items-center gap-4">
-                <Skeleton className="h-5 w-24 rounded-full" />
-                <div className="flex gap-4">
-                  {Array.from({ length: Math.min(i + 1, 4) }).map((_, j) => (
-                    <Skeleton key={j} className="h-28 w-36 rounded-lg" />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <LogoLoader />
         ) : chart.isError ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <AlertCircle className="h-6 w-6 text-danger" />

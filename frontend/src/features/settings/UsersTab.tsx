@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getDepartments, getOrgLevels } from '../../api/employees';
 import { createUser, getUsers, regeneratePassword, updateUser } from '../../api/settings';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useToast } from '../../components/Toast';
 import {
   LEVEL_BADGE,
@@ -72,11 +72,7 @@ export function UsersTab() {
       )}
 
       {users.isPending ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-14 w-full rounded-xl" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : filtered.length === 0 ? (
         <EmptyState icon={UserRound} title="No users found" text="Try a different search." />
       ) : (

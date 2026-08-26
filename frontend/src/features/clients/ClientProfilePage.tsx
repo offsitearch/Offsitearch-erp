@@ -3,7 +3,7 @@ import { Building2, Clock, Landmark, Mail, MapPin, MessageSquarePlus, Pencil, Ph
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { addCommunication, deleteClient, getClientProfile, updateClient } from '../../api/clients';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import {
   CLIENT_TYPE_OPTIONS,
@@ -69,18 +69,7 @@ export default function ClientProfilePage() {
   });
 
   if (profile.isPending) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-16 w-full" />
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <LogoLoader />;
   }
 
   const data = profile.data;

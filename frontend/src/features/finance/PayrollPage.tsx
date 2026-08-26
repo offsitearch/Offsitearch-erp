@@ -2,7 +2,7 @@
 import { ChevronLeft, ChevronRight, Download, Loader2, Play, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { downloadPayslip, getPayroll, processPayroll } from '../../api/finance';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useToast } from '../../components/Toast';
 import { formatINR, payrollStatusMeta } from '../../lib/constants';
 import { useAuthStore } from '../../store/authStore';
@@ -96,14 +96,7 @@ export default function PayrollPage() {
       <FinanceTabs level={user?.org_level_code} />
 
       {payroll.isPending ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-xl" />
-            ))}
-          </div>
-          <Skeleton className="h-64 w-full rounded-xl" />
-        </div>
+        <LogoLoader />
       ) : (
         <>
           <div className="grid grid-cols-3 gap-4">

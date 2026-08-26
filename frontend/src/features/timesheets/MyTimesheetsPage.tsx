@@ -26,6 +26,7 @@ import {
   submitTimesheet,
 } from '../../api/timesheets';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LogoLoader } from '../../components/LogoLoader';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { buildMonthGrid, formatDate, formatDateRange, formatDuration, monthLabel, toISODate, WEEKDAYS } from '../../lib/date';
@@ -504,11 +505,7 @@ function DaySheet() {
       )}
 
       {dayQuery.isPending ? (
-        <div className="space-y-3 px-5 py-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
+        <LogoLoader />
       ) : dayQuery.isError ? (
         <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
           <AlertCircle className="h-6 w-6 text-danger" />

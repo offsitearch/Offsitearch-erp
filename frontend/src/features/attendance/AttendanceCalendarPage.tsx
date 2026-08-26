@@ -18,7 +18,7 @@ import { getHolidays, getReportRows, downloadReportXlsx } from '../../api/attend
 import { ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_OPTIONS } from '../../lib/constants';
 import { buildMonthGrid, monthLabel, toISODate, WEEKDAYS } from '../../lib/date';
 import type { AttendanceStatus } from '../../lib/types';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { useTranslation } from 'react-i18next';
 import { inputClass } from '../../lib/styles';
 
@@ -187,18 +187,7 @@ export default function AttendanceCalendarPage() {
       {/* ── Calendar grid ── */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
         {report.isPending ? (
-          <div className="space-y-3 p-4">
-            <div className="grid grid-cols-5 gap-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-xl" />
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
-              ))}
-            </div>
-          </div>
+          <LogoLoader />
         ) : report.isError ? (
           <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
             <AlertCircle className="h-6 w-6 text-danger" />

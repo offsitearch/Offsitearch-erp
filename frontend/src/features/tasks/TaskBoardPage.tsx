@@ -8,7 +8,7 @@ import {
 import { useState } from 'react';
 import { getProjects } from '../../api/projects';
 import { getEmployees } from '../../api/employees';
-import { Skeleton } from '../../components/ui/Skeleton';
+import { LogoLoader } from '../../components/LogoLoader';
 import { createTask, getTaskBoard } from '../../api/tasks';
 import {
   canAccess,
@@ -93,13 +93,7 @@ export default function TaskBoardPage() {
       </div>
 
       {board.isPending ? (
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[1024px] grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-64 w-full" />
-            ))}
-          </div>
-        </div>
+        <LogoLoader />
       ) : (
         <div className="overflow-x-auto">
           <div className="grid min-w-[1024px] grid-cols-5 gap-4">
